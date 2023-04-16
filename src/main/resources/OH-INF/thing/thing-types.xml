@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<thing:thing-descriptions bindingId="solarman"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:thing="https://openhab.org/schemas/thing-description/v1.0.0"
+	xsi:schemaLocation="https://openhab.org/schemas/thing-description/v1.0.0 https://openhab.org/schemas/thing-description-1.0.0.xsd">
+
+	<!-- Sample Thing Type -->
+	<thing-type id="logger" extensible="true">
+		<label>Solarman Binding Thing</label>
+		<description>Solarman Logger Binding Thing</description>
+
+		<config-description>
+			<parameter name="hostname" type="text" required="true">
+				<context>network-address</context>
+				<label>Logger hostname</label>
+				<description>Hostname or IP address of the Solarman logger</description>
+				<advanced>false</advanced>
+			</parameter>
+			<parameter name="port" type="integer" required="false">
+				<label>Logger port</label>
+				<description>Port of the Solarman logger (default 8899)</description>
+				<default>8899</default>
+				<advanced>true</advanced>
+			</parameter>
+			<parameter name="inverterType" type="text" required="false">
+				<label>Inverter type</label>
+				<description>The type of inverter connected to the logger (default deye_sg04lp3)</description>
+				<default>deye_sg04lp3</default>
+				<advanced>false</advanced>
+			</parameter>
+			<parameter name="serialNumber" type="text" required="true">
+				<label>Logger serial number</label>
+				<description>Serial number of the Solarman logger</description>
+				<advanced>false</advanced>
+			</parameter>
+			<parameter name="refreshInterval" type="integer" required="false" unit="s" min="30">
+				<label>Refresh interval</label>
+				<description>Interval to query the logger (default 60)</description>
+				<default>60</default>
+				<advanced>true</advanced>
+			</parameter>
+		</config-description>
+	</thing-type>
+
+</thing:thing-descriptions>

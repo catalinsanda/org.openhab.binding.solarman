@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.openhab.addons.bundles</groupId>
+    <artifactId>org.openhab.addons.reactor.bundles</artifactId>
+    <version>4.0.0.M1</version>
+    <relativePath/>
+  </parent>
+
+  <artifactId>org.openhab.binding.solarman</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+
+  <name>openHAB Add-ons :: Bundles :: Solarman Binding</name>
+
+  <scm>
+    <connection>scm:git:${project.scm.url}</connection>
+    <developerConnection>scm:git:${project.scm.url}</developerConnection>
+    <url>git@github.com:catalinsanda/org.openhab.binding.solarman.git</url>
+    <tag>HEAD</tag>
+  </scm>
+
+  <repositories>
+    <repository>
+      <id>openhab-artifactory-release</id>
+      <name>Openhab JFrog Artifactory Release Repository</name>
+      <url>https://openhab.jfrog.io/openhab/libs-release</url>
+      <releases>
+        <enabled>true</enabled>
+        <updatePolicy>never</updatePolicy>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <id>openhab-snapshots-milestones</id>
+      <name>Openhab JFrog Artifactory Milestone Repository</name>
+      <url>https://openhab.jfrog.io/openhab/libs-milestone</url>
+      <releases>
+        <enabled>true</enabled>
+        <updatePolicy>never</updatePolicy>
+      </releases>
+    </repository>
+    <repository>
+      <id>openhab-snapshots-release</id>
+      <name>Openhab JFrog Artifactory Snapshot Repository</name>
+      <url>https://openhab.jfrog.io/openhab/libs-snapshot</url>
+      <releases>
+        <enabled>false</enabled>
+        <updatePolicy>never</updatePolicy>
+      </releases>
+      <snapshots>
+        <enabled>true</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+
+  <distributionManagement>
+    <repository>
+      <id>github</id>
+      <name>GitHub Catalin Sanda's Apache Maven Packages</name>
+      <url>https://maven.pkg.github.com/catalinsanda/org.openhab.binding.solarman</url>
+    </repository>
+  </distributionManagement>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.commonjava.maven.plugins</groupId>
+        <artifactId>directory-maven-plugin</artifactId>
+        <version>1.0</version>
+        <executions>
+          <execution>
+            <id>directories</id>
+            <phase>none</phase>
+            <goals>
+              <goal>directory-of</goal>
+            </goals>
+            <configuration>
+              <property>basedirRoot</property>
+              <project>
+                <groupId>org.openhab.addons</groupId>
+                <artifactId>org.openhab.addons.reactor</artifactId>
+              </project>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
