@@ -18,18 +18,25 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javax.measure.Unit;
+import javax.measure.format.MeasurementParseException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
+import org.openhab.binding.solarman.internal.channel.BaseChannelConfig;
 import org.openhab.binding.solarman.internal.defmodel.InverterDefinition;
 import org.openhab.binding.solarman.internal.defmodel.ParameterItem;
+import org.openhab.binding.solarman.internal.defmodel.Request;
 import org.openhab.binding.solarman.internal.defmodel.Validation;
+import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnection;
 import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnector;
 import org.openhab.binding.solarman.internal.modbus.SolarmanV5Protocol;
 import org.openhab.binding.solarman.internal.typeprovider.SolarmanChannelGroupTypeProvider;
@@ -64,14 +71,15 @@ import tech.units.indriya.format.SimpleUnitFormat;
 public class SolarmanLoggerHandler extends BaseThingHandler {
     private final Logger logger = LoggerFactory.getLogger(SolarmanLoggerHandler.class);
 
-    private @Nullable SolarmanLoggerConfiguration config;
-    private DefinitionParser definitionParser;
-    private SolarmanChannelTypeProvider channelTypeProvider;
-    private SolarmanChannelGroupTypeProvider channelGroupTypeProvider;
-    private SolarmanThingTypeProvider thingTypeProvider;
+    private final DefinitionParser definitionParser;
+    private final SolarmanChannelTypeProvider channelTypeProvider;
+    private final SolarmanChannelGroupTypeProvider channelGroupTypeProvider;
+    private final SolarmanThingTypeProvider thingTypeProvider;
 
-    public SolarmanLoggerHandler(Thing thing, SolarmanChannelTypeProvider channelTypeProvider,
-            SolarmanChannelGroupTypeProvider channelGroupTypeProvider, SolarmanThingTypeProvider thingTypeProvider) {
+    public SolarmanLoggerHandler(Thing thing,
+                                 SolarmanChannelTypeProvider channelTypeProvider,
+                                 SolarmanChannelGroupTypeProvider channelGroupTypeProvider,
+                                 SolarmanThingTypeProvider thingTypeProvider) {
         super(thing);
         this.channelTypeProvider = channelTypeProvider;
         this.channelGroupTypeProvider = channelGroupTypeProvider;
@@ -86,13 +94,26 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
     @Override
     public void initialize() {
         updateStatus(ThingStatus.UNKNOWN);
-        config = getConfigAs(SolarmanLoggerConfiguration.class);
+
+        SolarmanLoggerConfiguration config = getConfigAs(SolarmanLoggerConfiguration.class);
+        SolarmanLoggerConnector solarmanLoggerConnector = new SolarmanLoggerConnector(config);
+
+        if (config == null) {
+            updateStatus(ThingStatus.UNINITIALIZED,
+                    ThingStatusDetail.CONFIGURATION_ERROR,
+                    "Error fetching configuration");
+            return;
+        }
+
+        List<Channel> staticChannels = thing.getChannels();
 
         InverterDefinition inverterDefinition = definitionParser.parseDefinition(config.inverterType);
 
         if (inverterDefinition == null) {
             logger.error("Unable to find a definition for the provided inverter type");
-            updateStatus(ThingStatus.UNKNOWN);
+            updateStatus(ThingStatus.UNINITIALIZED,
+                    ThingStatusDetail.CONFIGURATION_ERROR,
+                    "Unable to find a definition for the provided inverter type");
             return;
         } else {
             if (logger.isDebugEnabled()) {
@@ -102,55 +123,136 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
         SolarmanLoggerConnector solarmanV5Connector = new SolarmanLoggerConnector(config);
         SolarmanV5Protocol solarmanV5Protocol = new SolarmanV5Protocol(config, solarmanV5Connector);
 
-        Map<ParameterItem, ChannelUID> paramToChannelMapping = setupChannelsForInverterDefinition(inverterDefinition);
+        List<Request> mergedRequests = (StringUtils.isNotEmpty(config.getAdditionalRequests())) ?
+                mergeRequests(
+                        inverterDefinition.getRequests(),
+                        extractAdditionalRequests((@NonNull String) config.getAdditionalRequests())
+                ) : inverterDefinition.getRequests();
 
-        scheduler.scheduleAtFixedRate(() -> fetchDataFromLogger(inverterDefinition, solarmanV5Protocol, paramToChannelMapping), 0, config.refreshInterval, TimeUnit.SECONDS);
+        Map<ParameterItem, ChannelUID> paramToChannelMapping = mergeMaps(
+                extractChannelMappingFromChannels(staticChannels),
+                setupChannelsForInverterDefinition(inverterDefinition)
+        );
+
+        scheduler.scheduleAtFixedRate(() -> fetchDataFromLogger(mergedRequests, solarmanLoggerConnector, solarmanV5Protocol, paramToChannelMapping), 0, config.refreshInterval, TimeUnit.SECONDS);
     }
 
-    private void fetchDataFromLogger(InverterDefinition inverterDefinition, SolarmanV5Protocol solarmanV5Protocol, Map<ParameterItem, ChannelUID> paramToChannelMapping) {
-        try {
+    private <K, V> Map<K, V> mergeMaps(Map<K, V> map1,
+                                       Map<K, V> map2) {
+        return Stream.concat(map1.entrySet().stream(), map2.entrySet().stream())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (v1, v2) -> v1));
+    }
+
+    private Map<ParameterItem, ChannelUID> extractChannelMappingFromChannels(List<Channel> channels) {
+        return channels.stream()
+                .map(channel -> {
+                    BaseChannelConfig bcc = channel.getConfiguration().as(BaseChannelConfig.class);
+                    return new AbstractMap.SimpleEntry<>(
+                            new ParameterItem(
+                                    channel.getLabel(),
+                                    "N/A",
+                                    "N/A",
+                                    bcc.uom,
+                                    bcc.scale,
+                                    bcc.rule,
+                                    parseRegisters(bcc.registers),
+                                    "N/A",
+                                    new Validation(),
+                                    bcc.offset,
+                                    Boolean.FALSE
+                            ),
+                            channel.getUID()
+                    );
+                })
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    private List<Integer> parseRegisters(String registers) {
+        String[] tokens = registers.split(",");
+        Pattern pattern = Pattern.compile("\\s*(0x[\\da-fA-F]+|[\\d]+)\\s*");
+        return Stream.of(tokens)
+                .map(pattern::matcher)
+                .filter(Matcher::matches)
+                .map(matcher -> matcher.group(1))
+                .map(SolarmanLoggerHandler::parseNumber)
+                .collect(Collectors.toList());
+    }
+
+    // TODO for now just concatenate the list, in the future, merge overlapping requests
+    private List<Request> mergeRequests(List<Request> requestList1, List<Request> requestList2) {
+        return Stream.concat(requestList1.stream(), requestList2.stream())
+                .collect(Collectors.toList());
+    }
+
+    private List<Request> extractAdditionalRequests(@NonNull String channels) {
+        String[] tokens = channels.split(",");
+        Pattern pattern = Pattern.compile("\\s*(0x[\\da-fA-F]+|[\\d]+)\\s*:\\s*(0x[\\da-fA-F]+|[\\d]+)\\s*-\\s*(0x[\\da-fA-F]+|[\\d]+)\\s*");
+
+        return Stream.of(tokens)
+                .map(pattern::matcher)
+                .filter(Matcher::matches)
+                .map(matcher -> {
+                    try {
+                        int functionCode = parseNumber(matcher.group(1));
+                        int start = parseNumber(matcher.group(2));
+                        int end = parseNumber(matcher.group(3));
+                        return new Request(functionCode, start, end);
+                    } catch (NumberFormatException e) {
+                        logger.error("Invalid number format in token: " + matcher.group() + " , ignoring additional requests", e);
+                        return (@NonNull Request) null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private static int parseNumber(String number) {
+        return number.startsWith("0x") ? Integer.parseInt(number.substring(2), 16) : Integer.parseInt(number);
+    }
+
+
+    private void fetchDataFromLogger(List<Request> requests,
+                                     SolarmanLoggerConnector solarmanLoggerConnector,
+                                     SolarmanV5Protocol solarmanV5Protocol,
+                                     Map<ParameterItem, ChannelUID> paramToChannelMapping) {
+
+        try (SolarmanLoggerConnection solarmanLoggerConnection = solarmanLoggerConnector.createConnection()) {
             logger.debug("Fetching data from logger");
 
-            AtomicBoolean thingReachable = new AtomicBoolean(false);
+            Map<Integer, byte[]> readRegistersMap = requests.stream()
+                    .map(request -> solarmanV5Protocol.readRegisters(solarmanLoggerConnection,
+                            (byte) request.getMbFunctioncode().intValue(),
+                            request.getStart(),
+                            request.getEnd())
+                    )
+                    .reduce(new HashMap<>(), this::mergeMaps);
 
-            inverterDefinition.getRequests().forEach(request -> {
-                if (request.getStart() >= request.getEnd()) {
-                    logger.warn("Error in inverter definition, start is larger or equal to end for request {}",
-                            request);
-                    return;
-                }
+            updateChannelsForReadRegisters(paramToChannelMapping, readRegistersMap);
 
-                Map<Integer, byte[]> readRegistersMap = solarmanV5Protocol.readRegisters(
-                        (byte) request.getMbFunctioncode().intValue(), request.getStart(), request.getEnd());
-
-                if (readRegistersMap != null && !readRegistersMap.isEmpty()) {
-                    thingReachable.set(true);
-                    updateChannelsForReadRegisters(paramToChannelMapping, readRegistersMap);
-                }
-            });
-            updateStatus(thingReachable.get() ? ThingStatus.ONLINE : ThingStatus.OFFLINE);
+            updateStatus(readRegistersMap.isEmpty() ? ThingStatus.OFFLINE : ThingStatus.ONLINE);
         } catch (Exception e) {
             logger.error("Error invoking handler", e);
         }
     }
 
     private void updateChannelsForReadRegisters(Map<ParameterItem, ChannelUID> paramToChannelMapping,
-            Map<Integer, byte[]> readRegistersMap) {
+                                                Map<Integer, byte[]> readRegistersMap) {
         paramToChannelMapping.forEach((parameterItem, channelUID) -> {
             List<Integer> registers = parameterItem.getRegisters();
             if (readRegistersMap.keySet().containsAll(registers)) {
                 switch (parameterItem.getRule()) {
                     case 0, 1, 2, 3, 4 -> updateChannelWithNumericValue(parameterItem, channelUID, registers,
                             readRegistersMap);
-                    case 5 -> updateChannelWithStringValue(parameterItem, channelUID, registers, readRegistersMap);
+                    case 5 -> updateChannelWithStringValue(channelUID, registers, readRegistersMap);
                     case 6 -> updateChannelsForRawValue(parameterItem, channelUID, registers, readRegistersMap);
                 }
+            } else {
+                logger.error("Unable to update channel {} because its registers were not read", channelUID.getId());
             }
         });
     }
 
-    private void updateChannelWithStringValue(ParameterItem parameterItem, ChannelUID channelUID,
-            List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
+    private void updateChannelWithStringValue(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
         String stringValue = registers.stream().map(readRegistersMap::get).reduce(new StringBuilder(), (acc, val) -> {
             short shortValue = ByteBuffer.wrap(val).order(ByteOrder.BIG_ENDIAN).getShort();
             return acc.append((char) (shortValue >> 8)).append((char) (shortValue & 0xFF));
@@ -160,14 +262,19 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
     }
 
     private void updateChannelWithNumericValue(ParameterItem parameterItem, ChannelUID channelUID,
-            List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
+                                               List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
         BigInteger value = extractNumericValue(registers, readRegistersMap);
         BigDecimal convertedValue = convertNumericValue(value, parameterItem.getOffset(), parameterItem.getScale());
         if (validateNumericValue(convertedValue, parameterItem.getValidation())) {
             State state;
             if (parameterItem.getUom() != null) {
-                Unit<?> uom = SimpleUnitFormat.getInstance().parse(parameterItem.getUom());
-                state = new QuantityType<>(convertedValue, uom);
+                try {
+                    Unit<?> uom = SimpleUnitFormat.getInstance().parse(parameterItem.getUom());
+                    state = new QuantityType<>(convertedValue, uom);
+                } catch (MeasurementParseException e) {
+                    state = new DecimalType(convertedValue);
+                }
+
             } else {
                 state = new DecimalType(convertedValue);
             }
@@ -176,10 +283,10 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
     }
 
     private void updateChannelsForRawValue(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers,
-            Map<Integer, byte[]> readRegistersMap) {
+                                           Map<Integer, byte[]> readRegistersMap) {
         String hexString = String.format("[%s]",
                 reverse(registers).stream().map(readRegistersMap::get).map(
-                        val -> String.format("0x%02X", ByteBuffer.wrap(val).order(ByteOrder.BIG_ENDIAN).getShort()))
+                                val -> String.format("0x%02X", ByteBuffer.wrap(val).order(ByteOrder.BIG_ENDIAN).getShort()))
                         .collect(Collectors.joining(",")));
 
         updateState(channelUID, new StringType(hexString));
@@ -211,9 +318,10 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
     }
 
     private Map<ParameterItem, ChannelUID> setupChannelsForInverterDefinition(InverterDefinition inverterDefinition) {
-        removeExistingChannels();
+        List<Channel> existingChannels = thing.getChannels();
 
         ThingBuilder thingBuilder = editThing();
+
         Map<ParameterItem, Channel> paramItemChannelMap = inverterDefinition.getParameters().stream()
                 .flatMap(parameter -> {
                     String groupName = escapeName(parameter.getGroup());
@@ -239,7 +347,9 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
                     });
                 }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
-        thingBuilder.withChannels(new ArrayList<>(paramItemChannelMap.values()));
+        ArrayList<Channel> dynamicChannels = new ArrayList<>(paramItemChannelMap.values());
+
+        thingBuilder.withChannels(Stream.concat(existingChannels.stream(), dynamicChannels.stream()).collect(Collectors.toList()));
 
         updateThing(thingBuilder.build());
 
@@ -252,14 +362,6 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
         name = name.replace("+", "plus");
         name = name.replace("-", "minus");
         return StringUtils.replaceChars(StringUtils.lowerCase(name), " .()/\\", "_");
-    }
-
-    private void removeExistingChannels() {
-        ThingBuilder thingBuilder = editThing();
-        thing.getChannels().forEach(channel -> {
-            thingBuilder.withoutChannel(channel.getUID());
-        });
-        updateThing(thingBuilder.build());
     }
 
     @Override

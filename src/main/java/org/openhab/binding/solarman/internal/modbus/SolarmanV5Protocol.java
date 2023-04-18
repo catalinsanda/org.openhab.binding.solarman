@@ -1,5 +1,6 @@
 package org.openhab.binding.solarman.internal.modbus;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
@@ -26,9 +27,9 @@ public class SolarmanV5Protocol {
         this.solarmanV5Connector = solarmanV5Connector;
     }
 
-    public Map<Integer, byte[]> readRegisters(byte mbFunctionCode, int firstReg, int lastReg) {
+    public Map<Integer, byte[]> readRegisters(SolarmanLoggerConnection solarmanLoggerConnection, byte mbFunctionCode, int firstReg, int lastReg) {
         byte[] solarmanV5Frame = buildSolarmanV5Frame(mbFunctionCode, firstReg, lastReg);
-        byte[] respFrame = solarmanV5Connector.sendRequest(solarmanV5Frame);
+        byte[] respFrame = solarmanLoggerConnection.sendRequest(solarmanV5Frame);
         if (respFrame.length > 0) {
             byte[] modbusRespFrame = extractModbusResponseFrame(respFrame);
             return parseModbusReadHoldingRegistersResponse(modbusRespFrame, firstReg, lastReg);

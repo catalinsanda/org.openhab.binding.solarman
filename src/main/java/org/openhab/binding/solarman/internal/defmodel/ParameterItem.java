@@ -38,6 +38,23 @@ public class ParameterItem {
     private BigDecimal offset;
     private Boolean isstr;
 
+    public ParameterItem() {
+    }
+
+    public ParameterItem(String name, String itemClass, String stateClass, String uom, BigDecimal scale, Integer rule, List<Integer> registers, String icon, Validation validation, BigDecimal offset, Boolean isstr) {
+        this.name = name;
+        this.itemClass = itemClass;
+        this.stateClass = stateClass;
+        this.uom = uom;
+        this.scale = scale;
+        this.rule = rule;
+        this.registers = registers;
+        this.icon = icon;
+        this.validation = validation;
+        this.offset = offset;
+        this.isstr = isstr;
+    }
+
     public String getName() {
         return name;
     }

@@ -16,6 +16,7 @@ import java.util.Set;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
+import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnector;
 import org.openhab.binding.solarman.internal.typeprovider.SolarmanChannelGroupTypeProvider;
 import org.openhab.binding.solarman.internal.typeprovider.SolarmanChannelTypeProvider;
 import org.openhab.binding.solarman.internal.typeprovider.SolarmanThingTypeProvider;
