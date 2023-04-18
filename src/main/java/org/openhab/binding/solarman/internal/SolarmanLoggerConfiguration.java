@@ -13,6 +13,7 @@
 package org.openhab.binding.solarman.internal;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.eclipse.jdt.annotation.Nullable;
 
 /**
  * The {@link SolarmanLoggerConfiguration} class contains fields mapping thing configuration parameters.
@@ -30,17 +31,20 @@ public class SolarmanLoggerConfiguration {
     public String serialNumber = "";
     public String inverterType = "sg04lp3";
     public int refreshInterval = 30;
+    @Nullable
+    public String additionalRequests = "";
 
     public SolarmanLoggerConfiguration() {
     }
 
     public SolarmanLoggerConfiguration(String hostname, Integer port, String serialNumber, String inverterType,
-            int refreshInterval) {
+            int refreshInterval, @Nullable String additionalRequests) {
         this.hostname = hostname;
         this.port = port;
         this.serialNumber = serialNumber;
         this.inverterType = inverterType;
         this.refreshInterval = refreshInterval;
+        this.additionalRequests = additionalRequests;
     }
 
     public String getHostname() {
@@ -61,5 +65,10 @@ public class SolarmanLoggerConfiguration {
 
     public int getRefreshInterval() {
         return refreshInterval;
+    }
+
+    @Nullable
+    public String getAdditionalRequests() {
+        return additionalRequests;
     }
 }

@@ -33,32 +33,46 @@ a browser (default user/pass: admin/admin) and getting it from the Status page. 
 
 ### `solarman:logger` Thing Configuration
 
-| Name            | Type    | Description                                   | Default      | Required | Advanced |
-|-----------------|---------|-----------------------------------------------|--------------|----------|----------|
-| hostname        | text    | Hostname or IP address of the Solarman logger | N/A          | yes      | no       |
-| serialNumber    | text    | Serial number of the Solarman logger          | N/A          | yes      | no       |
-| inverterType    | text    | The type of inverter connected to the logger  | deye_sg04lp3 | no       | no       |
-| port            | integer | Port of the Solarman logger                   | 8899         | no       | yes      |
-| refreshInterval | integer | Interval the device is polled in sec.         | 60           | no       | yes      |
+| Name               | Type    | Description                                             | Default      | Required | Advanced |
+|--------------------|---------|---------------------------------------------------------|--------------|----------|----------|
+| hostname           | text    | Hostname or IP address of the Solarman logger           | N/A          | yes      | no       |
+| serialNumber       | text    | Serial number of the Solarman logger                    | N/A          | yes      | no       |
+| inverterType       | text    | The type of inverter connected to the logger            | deye_sg04lp3 | no       | no       |
+| port               | integer | Port of the Solarman logger                             | 8899         | no       | yes      |
+| refreshInterval    | integer | Interval the device is polled in sec.                   | 60           | no       | yes      |
+| additionalRequests | text    | Additional requests besides the ones in the deffinition | N/A          | no       | yes      |
+
 
 The `inverterType` parameter governs what registers the binding will read from the logger and what channels it will
 expose.
 
 Possible values:
 
-| Inverter Type       | Inverters supported                         | Notes                                                            |
-|---------------------|---------------------------------------------|------------------------------------------------------------------|
-| deye_hybrid         | DEYE/Sunsynk/SolArk Hybrid inverters        | used when no lookup specified                                    |
-| deye_sg04lp3        | DEYE/Sunsynk/SolArk Hybrid 8/12K-SG04LP3    | e.g. 12K-SG04LP3-EU                                              |
-| deye_string         | DEYE/Sunsynk/SolArk String inverters        | e.g. SUN-4/5/6/7/8/10/12K-G03 Plus                               |
-| deye_2mppt          | DEYE Microinverter with 2 MPPT Trackers     | e.g. SUN600G3-EU-230 / SUN800G3-EU-230 / SUN1000G3-EU-230        |
-| deye_4mppt          | DEYE Microinverter with 4 MPPT Trackers     | e.g. SUN1300G3-EU-230 / SUN1600G3-EU-230 / SUN2000G3-EU-230      |
-| sofar_lsw3          | SOFAR Inverters                             |                                                                  |
-| sofar_g3hyd         | SOFAR Hybrid Three-Phase inverter           | HYD 6000 or rebranded (three-phase), ex. ZCS Azzurro 3PH HYD-ZSS |
-| sofar_hyd3k-6k      | SOFAR Hybrid Single-Phase inverter          | HYD 6000 or rebranded (single-phase), ex. ZCS Azzurro HYD-ZSS    |
-| solis_hybrid        | SOLIS Hybrid inverter                       |                                                                  |
-| solid_1p8k-5g       | SOLIS 1P8K-5G                               |                                                                  |
-| zcs_azzurro-ktl-v3  | ZCS Azzurro KTL-V3 inverters                | ZCS Azzurro 3.3/4.4/5.5/6.6 KTL-V3 (rebranded Sofar KTLX-G3)     |
+| Inverter Type      | Inverters supported                         | Notes                                                            |
+|--------------------|---------------------------------------------|------------------------------------------------------------------|
+| deye_hybrid        | DEYE/Sunsynk/SolArk Hybrid inverters        | used when no lookup specified                                    |
+| deye_sg04lp3       | DEYE/Sunsynk/SolArk Hybrid 8/12K-SG04LP3    | e.g. 12K-SG04LP3-EU                                              |
+| deye_string        | DEYE/Sunsynk/SolArk String inverters        | e.g. SUN-4/5/6/7/8/10/12K-G03 Plus                               |
+| deye_2mppt         | DEYE Microinverter with 2 MPPT Trackers     | e.g. SUN600G3-EU-230 / SUN800G3-EU-230 / SUN1000G3-EU-230        |
+| deye_4mppt         | DEYE Microinverter with 4 MPPT Trackers     | e.g. SUN1300G3-EU-230 / SUN1600G3-EU-230 / SUN2000G3-EU-230      |
+| sofar_lsw3         | SOFAR Inverters                             |                                                                  |
+| sofar_g3hyd        | SOFAR Hybrid Three-Phase inverter           | HYD 6000 or rebranded (three-phase), ex. ZCS Azzurro 3PH HYD-ZSS |
+| sofar_hyd3k-6k-es  | SOFAR Hybrid Single-Phase inverter          | HYD 6000 or rebranded (single-phase), ex. ZCS Azzurro HYD-ZSS    |
+| solis_hybrid       | SOLIS Hybrid inverter                       |                                                                  |
+| solid_1p8k-5g      | SOLIS 1P8K-5G                               |                                                                  |
+| zcs_azzurro-ktl-v3 | ZCS Azzurro KTL-V3 inverters                | ZCS Azzurro 3.3/4.4/5.5/6.6 KTL-V3 (rebranded Sofar KTLX-G3)     |
+
+The `additionalRequests` allows the user to specify additional address ranges to be polled. The format of the value is `mb_functioncode1:start1-end1, mb_functioncode2:start2-end2,...`
+For example `"0x03:0x27D-0x27E"` will issue an additional read for Holding Registers between `0x27D` and `0x27E`.
+
+This is useful when coupled with user defined channels, for example a thing definition like the one below will also read the register
+for the AC frequency on a Deye inverter, besides the ones pre-defined in the `deye_sg04lp3` inverter definition.
+```java
+Thing solarman:logger:local [ hostname="x.x.x.x", inverterType="deye_sg04lp3", serialNumber="1234567890", additionalRequests="0x03:0x27D-0x27E" ] {
+        Channels:
+        Type number : Inverter_Frequency [scale="0.01", uom="Hz", rule="3", registers="0x27E"]
+}
+```
 
 **Please note**
 

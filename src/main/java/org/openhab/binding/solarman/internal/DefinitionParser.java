@@ -39,7 +39,12 @@ public class DefinitionParser {
 
     public InverterDefinition parseDefinition(String definitionId) {
         ClassLoader cl = Objects.requireNonNull(getClass().getClassLoader());
-        try (InputStream is = cl.getResourceAsStream(String.format("definitions/%s.yaml", definitionId))) {
+        String definitionFileName = String.format("definitions/%s.yaml", definitionId);
+        try (InputStream is = cl.getResourceAsStream(definitionFileName)) {
+            if (is == null) {
+                logger.error("Unable to read definition file {}", definitionFileName);
+                return null;
+            }
             return mapper.readValue(is, InverterDefinition.class);
         } catch (IOException e) {
             logger.error("Error parsing definition with ID: {}", definitionId, e);
