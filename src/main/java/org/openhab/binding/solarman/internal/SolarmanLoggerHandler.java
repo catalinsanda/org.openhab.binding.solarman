@@ -104,7 +104,13 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
 
         Map<ParameterItem, ChannelUID> paramToChannelMapping = setupChannelsForInverterDefinition(inverterDefinition);
 
-        scheduler.scheduleAtFixedRate(() -> {
+        scheduler.scheduleAtFixedRate(() -> fetchDataFromLogger(inverterDefinition, solarmanV5Protocol, paramToChannelMapping), 0, config.refreshInterval, TimeUnit.SECONDS);
+    }
+
+    private void fetchDataFromLogger(InverterDefinition inverterDefinition, SolarmanV5Protocol solarmanV5Protocol, Map<ParameterItem, ChannelUID> paramToChannelMapping) {
+        try {
+            logger.debug("Fetching data from logger");
+
             AtomicBoolean thingReachable = new AtomicBoolean(false);
 
             inverterDefinition.getRequests().forEach(request -> {
@@ -117,16 +123,15 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
                 Map<Integer, byte[]> readRegistersMap = solarmanV5Protocol.readRegisters(
                         (byte) request.getMbFunctioncode().intValue(), request.getStart(), request.getEnd());
 
-                if (readRegistersMap != null && !readRegistersMap.isEmpty())
+                if (readRegistersMap != null && !readRegistersMap.isEmpty()) {
                     thingReachable.set(true);
-                else
-                    return;
-
-                updateChannelsForReadRegisters(paramToChannelMapping, readRegistersMap);
+                    updateChannelsForReadRegisters(paramToChannelMapping, readRegistersMap);
+                }
             });
-
             updateStatus(thingReachable.get() ? ThingStatus.ONLINE : ThingStatus.OFFLINE);
-        }, 0, config.refreshInterval, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            logger.error("Error invoking handler", e);
+        }
     }
 
     private void updateChannelsForReadRegisters(Map<ParameterItem, ChannelUID> paramToChannelMapping,
