@@ -29,7 +29,8 @@ public class SolarmanLoggerConnector {
                 solarmanLoggerConfiguration.getPort());
 
         try (Socket clientSocket = new Socket()) {
-            clientSocket.connect(sockaddr, 10000);
+            clientSocket.setSoTimeout(10_000);
+            clientSocket.connect(sockaddr, 10_000);
             LOGGER.debug("Request frame: " + bytesToHex(reqFrame));
             clientSocket.getOutputStream().write(reqFrame);
             byte[] buffer = new byte[1024];
