@@ -17,6 +17,7 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.*;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -75,6 +76,8 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
     private final SolarmanChannelTypeProvider channelTypeProvider;
     private final SolarmanChannelGroupTypeProvider channelGroupTypeProvider;
     private final SolarmanThingTypeProvider thingTypeProvider;
+    @Nullable
+    private volatile ScheduledFuture<?> scheduledFuture;
 
     public SolarmanLoggerHandler(Thing thing,
                                  SolarmanChannelTypeProvider channelTypeProvider,
@@ -134,7 +137,10 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
                 setupChannelsForInverterDefinition(inverterDefinition)
         );
 
-        scheduler.scheduleAtFixedRate(() -> fetchDataFromLogger(mergedRequests, solarmanLoggerConnector, solarmanV5Protocol, paramToChannelMapping), 0, config.refreshInterval, TimeUnit.SECONDS);
+        scheduledFuture = scheduler.scheduleAtFixedRate(
+                () -> fetchDataFromLogger(mergedRequests, solarmanLoggerConnector, solarmanV5Protocol, paramToChannelMapping),
+                0, config.refreshInterval, TimeUnit.SECONDS
+        );
     }
 
     private <K, V> Map<K, V> mergeMaps(Map<K, V> map1,
@@ -367,5 +373,8 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
     @Override
     public void dispose() {
         super.dispose();
+
+        if (scheduledFuture != null)
+            Objects.requireNonNull(scheduledFuture).cancel(false);
     }
 }
