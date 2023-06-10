@@ -69,6 +69,11 @@
   <build>
     <plugins>
       <plugin>
+        <groupId>org.apache.maven.plugin</groupId>
+        <artifactId>maven-release-plugin</artifactId>
+        <version>3.0.1</version>
+      </plugin>
+      <plugin>
         <groupId>org.commonjava.maven.plugins</groupId>
         <artifactId>directory-maven-plugin</artifactId>
         <version>1.0</version>
