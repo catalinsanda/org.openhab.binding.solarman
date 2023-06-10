@@ -351,11 +351,16 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
                                 .withType(channelTypeUID).withKind(ChannelKind.STATE)
                                 .withConfiguration(new Configuration()).build());
                     });
-                }).collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+                })
+                .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
 
         ArrayList<Channel> dynamicChannels = new ArrayList<>(paramItemChannelMap.values());
 
-        thingBuilder.withChannels(Stream.concat(existingChannels.stream(), dynamicChannels.stream()).collect(Collectors.toList()));
+        thingBuilder.withChannels(
+                Stream.concat(existingChannels.stream(), dynamicChannels.stream())
+                        .filter(channel -> thing.getChannel(channel.getUID()) == null)
+                        .collect(Collectors.toList())
+        );
 
         updateThing(thingBuilder.build());
 
