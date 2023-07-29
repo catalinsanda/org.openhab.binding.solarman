@@ -1,5 +1,7 @@
 # Solarman Logger Binding
 
+[![Build Status](https://app.travis-ci.com/catalinsanda/org.openhab.binding.solarman.svg?branch=main)](https://app.travis-ci.com/catalinsanda/org.openhab.binding.solarman)
+
 Binding used to communicate with Solarman (IGEN-Tech) v5 based solar inverter data loggers in direct-mode over the local
 network.
 More information about the different types of stick loggers is available on the
