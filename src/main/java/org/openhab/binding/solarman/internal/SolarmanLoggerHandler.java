@@ -247,8 +247,10 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
             List<Integer> registers = parameterItem.getRegisters();
             if (readRegistersMap.keySet().containsAll(registers)) {
                 switch (parameterItem.getRule()) {
-                    case 0, 1, 2, 3, 4 -> updateChannelWithNumericValue(parameterItem, channelUID, registers,
-                            readRegistersMap);
+                    case 1, 3 -> updateChannelWithNumericValue(parameterItem, channelUID, registers,
+                            readRegistersMap, ValueType.UNSIGNED);
+                    case 2, 4 -> updateChannelWithNumericValue(parameterItem, channelUID, registers,
+                            readRegistersMap, ValueType.SIGNED);
                     case 5 -> updateChannelWithStringValue(channelUID, registers, readRegistersMap);
                     case 6 -> updateChannelsForRawValue(parameterItem, channelUID, registers, readRegistersMap);
                 }
@@ -268,8 +270,8 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
     }
 
     private void updateChannelWithNumericValue(ParameterItem parameterItem, ChannelUID channelUID,
-                                               List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
-        BigInteger value = extractNumericValue(registers, readRegistersMap);
+                                               List<Integer> registers, Map<Integer, byte[]> readRegistersMap, ValueType valueType) {
+        BigInteger value = extractNumericValue(registers, readRegistersMap, valueType);
         BigDecimal convertedValue = convertNumericValue(value, parameterItem.getOffset(), parameterItem.getScale());
         if (validateNumericValue(convertedValue, parameterItem.getValidation())) {
             State state;
@@ -307,9 +309,9 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
                 .multiply(scale != null ? scale : BigDecimal.ONE);
     }
 
-    private BigInteger extractNumericValue(List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
+    private BigInteger extractNumericValue(List<Integer> registers, Map<Integer, byte[]> readRegistersMap, ValueType valueType) {
         return reverse(registers).stream().map(readRegistersMap::get).reduce(BigInteger.ZERO,
-                (acc, val) -> acc.shiftLeft(Short.SIZE).add(BigInteger.valueOf(ByteBuffer.wrap(val).getShort())),
+                (acc, val) -> acc.shiftLeft(Short.SIZE).add(BigInteger.valueOf(ByteBuffer.wrap(val).getShort() & (valueType == ValueType.UNSIGNED ? 0xFFFF : 0xFFFFFFFF))),
                 BigInteger::add);
     }
 
@@ -381,5 +383,9 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
 
         if (scheduledFuture != null)
             Objects.requireNonNull(scheduledFuture).cancel(false);
+    }
+
+    private enum ValueType {
+        UNSIGNED, SIGNED
     }
 }
