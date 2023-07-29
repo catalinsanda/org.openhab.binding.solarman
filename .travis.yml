@@ -1,0 +1,6 @@
+language: java
+sudo: false
+install: skip
+script: mvn clean install -DskipChecks -Dspotless.check.skip=true
+jdk:
+  - oraclejdk17
