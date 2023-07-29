@@ -372,7 +372,7 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
     private static String escapeName(String name) {
         name = name.replace("+", "plus");
         name = name.replace("-", "minus");
-        return StringUtils.replaceChars(StringUtils.lowerCase(name), " .()/\\", "_");
+        return StringUtils.replaceChars(StringUtils.lowerCase(name), " .()/\\&", "_");
     }
 
     @Override
