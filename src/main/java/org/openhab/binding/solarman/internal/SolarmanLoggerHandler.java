@@ -12,6 +12,26 @@
  */
 package org.openhab.binding.solarman.internal;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.*;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+import javax.measure.Unit;
+import javax.measure.format.MeasurementParseException;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.eclipse.jdt.annotation.NonNull;
@@ -30,6 +50,7 @@ import org.openhab.binding.solarman.internal.typeprovider.SolarmanChannelTypePro
 import org.openhab.binding.solarman.internal.typeprovider.SolarmanThingTypeProvider;
 import org.openhab.binding.solarman.internal.util.StreamUtils;
 import org.openhab.core.config.core.Configuration;
+import org.openhab.core.library.types.DateTimeType;
 import org.openhab.core.library.types.DecimalType;
 import org.openhab.core.library.types.QuantityType;
 import org.openhab.core.library.types.StringType;
@@ -45,22 +66,8 @@ import org.openhab.core.types.Command;
 import org.openhab.core.types.State;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tech.units.indriya.format.SimpleUnitFormat;
 
-import javax.measure.Unit;
-import javax.measure.format.MeasurementParseException;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.*;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
+import tech.units.indriya.format.SimpleUnitFormat;
 
 import static org.openhab.binding.solarman.internal.util.StreamUtils.reverse;
 
@@ -70,7 +77,6 @@ import static org.openhab.binding.solarman.internal.util.StreamUtils.reverse;
  *
  * @author Catalin Sanda - Initial contribution
  */
-// @TODO - split me
 @NonNullByDefault
 public class SolarmanLoggerHandler extends BaseThingHandler {
     private final Logger logger = LoggerFactory.getLogger(SolarmanLoggerHandler.class);
@@ -256,9 +262,9 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
                             readRegistersMap, ValueType.SIGNED);
                     case 5 -> updateChannelWithStringValue(channelUID, registers, readRegistersMap);
                     case 6 -> updateChannelWithRawValue(parameterItem, channelUID, registers, readRegistersMap);
-                    case 7 -> updateChannelWithVersion(parameterItem, channelUID, registers, readRegistersMap);
-                    case 8 -> updateChannelWithDateTime(parameterItem, channelUID, registers, readRegistersMap);
-                    case 9 -> updateChannelWithTime(parameterItem, channelUID, registers, readRegistersMap);
+                    case 7 -> updateChannelWithVersion(channelUID, registers, readRegistersMap);
+                    case 8 -> updateChannelWithDateTime(channelUID, registers, readRegistersMap);
+                    case 9 -> updateChannelWithTime(channelUID, registers, readRegistersMap);
                 }
             } else {
                 logger.error("Unable to update channel {} because its registers were not read", channelUID.getId());
@@ -266,7 +272,7 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
         });
     }
 
-    private void updateChannelWithTime(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
+    private void updateChannelWithTime(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
         String stringValue = registers.stream()
                 .map(readRegistersMap::get)
                 .map(v -> ByteBuffer.wrap(v).getShort())
@@ -277,7 +283,7 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
         updateState(channelUID, new StringType(stringValue));
     }
 
-    private void updateChannelWithDateTime(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
+    private void updateChannelWithDateTime(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
         String stringValue = StreamUtils.zip(
                         IntStream.range(0, registers.size()).boxed(),
                         registers.stream().map(readRegistersMap::get).map(v -> ByteBuffer.wrap(v).getShort()),
@@ -295,10 +301,17 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
                 })
                 .collect(Collectors.joining());
 
-        updateState(channelUID, new StringType(stringValue));
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yy/M/d H:m:s");
+            LocalDateTime dateTime = LocalDateTime.parse(stringValue, formatter);
+
+            updateState(channelUID, new DateTimeType(dateTime.atZone(ZoneId.systemDefault())));
+        } catch (DateTimeParseException e) {
+            logger.error("Unable to parse string date {} to a DateTime object", stringValue);
+        }
     }
 
-    private void updateChannelWithVersion(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
+    private void updateChannelWithVersion(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
         String stringValue = registers.stream()
                 .map(readRegistersMap::get)
                 .map(v -> ByteBuffer.wrap(v).getShort())
