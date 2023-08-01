@@ -12,21 +12,6 @@
  */
 package org.openhab.binding.solarman.internal;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.*;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
-import javax.measure.Unit;
-import javax.measure.format.MeasurementParseException;
-
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.eclipse.jdt.annotation.NonNull;
@@ -43,6 +28,7 @@ import org.openhab.binding.solarman.internal.modbus.SolarmanV5Protocol;
 import org.openhab.binding.solarman.internal.typeprovider.SolarmanChannelGroupTypeProvider;
 import org.openhab.binding.solarman.internal.typeprovider.SolarmanChannelTypeProvider;
 import org.openhab.binding.solarman.internal.typeprovider.SolarmanThingTypeProvider;
+import org.openhab.binding.solarman.internal.util.StreamUtils;
 import org.openhab.core.config.core.Configuration;
 import org.openhab.core.library.types.DecimalType;
 import org.openhab.core.library.types.QuantityType;
@@ -59,8 +45,24 @@ import org.openhab.core.types.Command;
 import org.openhab.core.types.State;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import tech.units.indriya.format.SimpleUnitFormat;
+
+import javax.measure.Unit;
+import javax.measure.format.MeasurementParseException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.*;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+import static org.openhab.binding.solarman.internal.util.StreamUtils.reverse;
 
 /**
  * The {@link SolarmanLoggerHandler} is responsible for handling commands, which are
@@ -68,6 +70,7 @@ import tech.units.indriya.format.SimpleUnitFormat;
  *
  * @author Catalin Sanda - Initial contribution
  */
+// @TODO - split me
 @NonNullByDefault
 public class SolarmanLoggerHandler extends BaseThingHandler {
     private final Logger logger = LoggerFactory.getLogger(SolarmanLoggerHandler.class);
@@ -252,12 +255,60 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
                     case 2, 4 -> updateChannelWithNumericValue(parameterItem, channelUID, registers,
                             readRegistersMap, ValueType.SIGNED);
                     case 5 -> updateChannelWithStringValue(channelUID, registers, readRegistersMap);
-                    case 6 -> updateChannelsForRawValue(parameterItem, channelUID, registers, readRegistersMap);
+                    case 6 -> updateChannelWithRawValue(parameterItem, channelUID, registers, readRegistersMap);
+                    case 7 -> updateChannelWithVersion(parameterItem, channelUID, registers, readRegistersMap);
+                    case 8 -> updateChannelWithDateTime(parameterItem, channelUID, registers, readRegistersMap);
+                    case 9 -> updateChannelWithTime(parameterItem, channelUID, registers, readRegistersMap);
                 }
             } else {
                 logger.error("Unable to update channel {} because its registers were not read", channelUID.getId());
             }
         });
+    }
+
+    private void updateChannelWithTime(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
+        String stringValue = registers.stream()
+                .map(readRegistersMap::get)
+                .map(v -> ByteBuffer.wrap(v).getShort())
+                .map(rawVal -> String.format("%02d", rawVal / 100) + ":" +
+                        String.format("%02d", rawVal % 100))
+                .collect(Collectors.joining());
+
+        updateState(channelUID, new StringType(stringValue));
+    }
+
+    private void updateChannelWithDateTime(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
+        String stringValue = StreamUtils.zip(
+                        IntStream.range(0, registers.size()).boxed(),
+                        registers.stream().map(readRegistersMap::get).map(v -> ByteBuffer.wrap(v).getShort()),
+                        StreamUtils.Tuple::new)
+                .map(t -> {
+                    int index = t.a();
+                    short rawVal = t.b();
+
+                    return switch (index) {
+                        case 0 -> (rawVal >> 8) + "/" + (rawVal & 0xFF) + "/";
+                        case 1 -> (rawVal >> 8) + " " + (rawVal & 0xFF) + ":";
+                        case 2 -> (rawVal >> 8) + ":" + (rawVal & 0xFF);
+                        default -> (rawVal >> 8) + "" + (rawVal & 0xFF);
+                    };
+                })
+                .collect(Collectors.joining());
+
+        updateState(channelUID, new StringType(stringValue));
+    }
+
+    private void updateChannelWithVersion(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
+        String stringValue = registers.stream()
+                .map(readRegistersMap::get)
+                .map(v -> ByteBuffer.wrap(v).getShort())
+                .map(rawVal -> (rawVal >> 12) + "." +
+                        ((rawVal >> 8) & 0x0F) + "." +
+                        ((rawVal >> 4) & 0x0F) + "." +
+                        (rawVal & 0x0F))
+                .collect(Collectors.joining());
+
+        updateState(channelUID, new StringType(stringValue));
     }
 
     private void updateChannelWithStringValue(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
@@ -290,11 +341,12 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
         }
     }
 
-    private void updateChannelsForRawValue(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers,
+    private void updateChannelWithRawValue(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers,
                                            Map<Integer, byte[]> readRegistersMap) {
         String hexString = String.format("[%s]",
-                reverse(registers).stream().map(readRegistersMap::get).map(
-                                val -> String.format("0x%02X", ByteBuffer.wrap(val).order(ByteOrder.BIG_ENDIAN).getShort()))
+                reverse(registers).stream()
+                        .map(readRegistersMap::get)
+                        .map(val -> String.format("0x%02X", ByteBuffer.wrap(val).order(ByteOrder.BIG_ENDIAN).getShort()))
                         .collect(Collectors.joining(",")));
 
         updateState(channelUID, new StringType(hexString));
@@ -313,16 +365,6 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
         return reverse(registers).stream().map(readRegistersMap::get).reduce(BigInteger.ZERO,
                 (acc, val) -> acc.shiftLeft(Short.SIZE).add(BigInteger.valueOf(ByteBuffer.wrap(val).getShort() & (valueType == ValueType.UNSIGNED ? 0xFFFF : 0xFFFFFFFF))),
                 BigInteger::add);
-    }
-
-    private Collection<Object> reverse(List<Integer> list) {
-        return list.stream().reduce(new ArrayList<>(), (l, i) -> {
-            l.add(0, i);
-            return l;
-        }, (l1, l2) -> {
-            l2.addAll(l1);
-            return l2;
-        });
     }
 
     private Map<ParameterItem, ChannelUID> setupChannelsForInverterDefinition(InverterDefinition inverterDefinition) {
