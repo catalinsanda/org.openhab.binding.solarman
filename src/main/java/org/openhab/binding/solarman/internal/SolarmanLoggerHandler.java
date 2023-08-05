@@ -38,6 +38,7 @@ import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.solarman.internal.channel.BaseChannelConfig;
+import org.openhab.binding.solarman.internal.channel.SolarmanChannelManager;
 import org.openhab.binding.solarman.internal.defmodel.InverterDefinition;
 import org.openhab.binding.solarman.internal.defmodel.ParameterItem;
 import org.openhab.binding.solarman.internal.defmodel.Request;
@@ -45,9 +46,8 @@ import org.openhab.binding.solarman.internal.defmodel.Validation;
 import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnection;
 import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnector;
 import org.openhab.binding.solarman.internal.modbus.SolarmanV5Protocol;
-import org.openhab.binding.solarman.internal.typeprovider.SolarmanChannelGroupTypeProvider;
-import org.openhab.binding.solarman.internal.typeprovider.SolarmanChannelTypeProvider;
-import org.openhab.binding.solarman.internal.typeprovider.SolarmanThingTypeProvider;
+import org.openhab.binding.solarman.internal.typeprovider.ChannelUtils;
+import org.openhab.binding.solarman.internal.updater.SolarmanChannelUpdater;
 import org.openhab.binding.solarman.internal.util.StreamUtils;
 import org.openhab.core.config.core.Configuration;
 import org.openhab.core.library.types.DateTimeType;
@@ -61,7 +61,6 @@ import org.openhab.core.thing.binding.builder.ThingBuilder;
 import org.openhab.core.thing.type.ChannelGroupDefinition;
 import org.openhab.core.thing.type.ChannelGroupTypeUID;
 import org.openhab.core.thing.type.ChannelKind;
-import org.openhab.core.thing.type.ChannelTypeUID;
 import org.openhab.core.types.Command;
 import org.openhab.core.types.State;
 import org.slf4j.Logger;
@@ -69,6 +68,8 @@ import org.slf4j.LoggerFactory;
 
 import tech.units.indriya.format.SimpleUnitFormat;
 
+import static org.openhab.binding.solarman.internal.SolarmanBindingConstants.DYNAMIC_CHANNEL;
+import static org.openhab.binding.solarman.internal.typeprovider.ChannelUtils.escapeName;
 import static org.openhab.binding.solarman.internal.util.StreamUtils.reverse;
 
 /**
@@ -82,21 +83,14 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
     private final Logger logger = LoggerFactory.getLogger(SolarmanLoggerHandler.class);
 
     private final DefinitionParser definitionParser;
-    private final SolarmanChannelTypeProvider channelTypeProvider;
-    private final SolarmanChannelGroupTypeProvider channelGroupTypeProvider;
-    private final SolarmanThingTypeProvider thingTypeProvider;
+    private final SolarmanChannelManager solarmanChannelManager;
     @Nullable
     private volatile ScheduledFuture<?> scheduledFuture;
 
-    public SolarmanLoggerHandler(Thing thing,
-                                 SolarmanChannelTypeProvider channelTypeProvider,
-                                 SolarmanChannelGroupTypeProvider channelGroupTypeProvider,
-                                 SolarmanThingTypeProvider thingTypeProvider) {
+    public SolarmanLoggerHandler(Thing thing) {
         super(thing);
-        this.channelTypeProvider = channelTypeProvider;
-        this.channelGroupTypeProvider = channelGroupTypeProvider;
-        this.thingTypeProvider = thingTypeProvider;
         this.definitionParser = new DefinitionParser();
+        this.solarmanChannelManager = new SolarmanChannelManager();
     }
 
     @Override
@@ -117,7 +111,9 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
             return;
         }
 
-        List<Channel> staticChannels = thing.getChannels();
+        List<Channel> staticChannels = thing.getChannels().stream()
+                .filter(channel -> !channel.getProperties().containsKey(DYNAMIC_CHANNEL))
+                .toList();
 
         InverterDefinition inverterDefinition = definitionParser.parseDefinition(config.inverterType);
 
@@ -146,8 +142,17 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
                 setupChannelsForInverterDefinition(inverterDefinition)
         );
 
+        SolarmanChannelUpdater solarmanChannelUpdater = new SolarmanChannelUpdater(
+                this::updateStatus,
+                this::updateState
+        );
+
         scheduledFuture = scheduler.scheduleAtFixedRate(
-                () -> fetchDataFromLogger(mergedRequests, solarmanLoggerConnector, solarmanV5Protocol, paramToChannelMapping),
+                () -> solarmanChannelUpdater.fetchDataFromLogger(
+                        mergedRequests,
+                        solarmanLoggerConnector,
+                        solarmanV5Protocol,
+                        paramToChannelMapping),
                 0, config.refreshInterval, TimeUnit.SECONDS
         );
     }
@@ -225,211 +230,31 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
         return number.startsWith("0x") ? Integer.parseInt(number.substring(2), 16) : Integer.parseInt(number);
     }
 
-
-    private void fetchDataFromLogger(List<Request> requests,
-                                     SolarmanLoggerConnector solarmanLoggerConnector,
-                                     SolarmanV5Protocol solarmanV5Protocol,
-                                     Map<ParameterItem, ChannelUID> paramToChannelMapping) {
-
-        try (SolarmanLoggerConnection solarmanLoggerConnection = solarmanLoggerConnector.createConnection()) {
-            logger.debug("Fetching data from logger");
-
-            Map<Integer, byte[]> readRegistersMap = requests.stream()
-                    .map(request -> solarmanV5Protocol.readRegisters(solarmanLoggerConnection,
-                            (byte) request.getMbFunctioncode().intValue(),
-                            request.getStart(),
-                            request.getEnd())
-                    )
-                    .reduce(new HashMap<>(), this::mergeMaps);
-
-            updateChannelsForReadRegisters(paramToChannelMapping, readRegistersMap);
-
-            updateStatus(readRegistersMap.isEmpty() ? ThingStatus.OFFLINE : ThingStatus.ONLINE);
-        } catch (Exception e) {
-            logger.error("Error invoking handler", e);
-        }
-    }
-
-    private void updateChannelsForReadRegisters(Map<ParameterItem, ChannelUID> paramToChannelMapping,
-                                                Map<Integer, byte[]> readRegistersMap) {
-        paramToChannelMapping.forEach((parameterItem, channelUID) -> {
-            List<Integer> registers = parameterItem.getRegisters();
-            if (readRegistersMap.keySet().containsAll(registers)) {
-                switch (parameterItem.getRule()) {
-                    case 1, 3 -> updateChannelWithNumericValue(parameterItem, channelUID, registers,
-                            readRegistersMap, ValueType.UNSIGNED);
-                    case 2, 4 -> updateChannelWithNumericValue(parameterItem, channelUID, registers,
-                            readRegistersMap, ValueType.SIGNED);
-                    case 5 -> updateChannelWithStringValue(channelUID, registers, readRegistersMap);
-                    case 6 -> updateChannelWithRawValue(parameterItem, channelUID, registers, readRegistersMap);
-                    case 7 -> updateChannelWithVersion(channelUID, registers, readRegistersMap);
-                    case 8 -> updateChannelWithDateTime(channelUID, registers, readRegistersMap);
-                    case 9 -> updateChannelWithTime(channelUID, registers, readRegistersMap);
-                }
-            } else {
-                logger.error("Unable to update channel {} because its registers were not read", channelUID.getId());
-            }
-        });
-    }
-
-    private void updateChannelWithTime(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
-        String stringValue = registers.stream()
-                .map(readRegistersMap::get)
-                .map(v -> ByteBuffer.wrap(v).getShort())
-                .map(rawVal -> String.format("%02d", rawVal / 100) + ":" +
-                        String.format("%02d", rawVal % 100))
-                .collect(Collectors.joining());
-
-        updateState(channelUID, new StringType(stringValue));
-    }
-
-    private void updateChannelWithDateTime(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
-        String stringValue = StreamUtils.zip(
-                        IntStream.range(0, registers.size()).boxed(),
-                        registers.stream().map(readRegistersMap::get).map(v -> ByteBuffer.wrap(v).getShort()),
-                        StreamUtils.Tuple::new)
-                .map(t -> {
-                    int index = t.a();
-                    short rawVal = t.b();
-
-                    return switch (index) {
-                        case 0 -> (rawVal >> 8) + "/" + (rawVal & 0xFF) + "/";
-                        case 1 -> (rawVal >> 8) + " " + (rawVal & 0xFF) + ":";
-                        case 2 -> (rawVal >> 8) + ":" + (rawVal & 0xFF);
-                        default -> (rawVal >> 8) + "" + (rawVal & 0xFF);
-                    };
-                })
-                .collect(Collectors.joining());
-
-        try {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yy/M/d H:m:s");
-            LocalDateTime dateTime = LocalDateTime.parse(stringValue, formatter);
-
-            updateState(channelUID, new DateTimeType(dateTime.atZone(ZoneId.systemDefault())));
-        } catch (DateTimeParseException e) {
-            logger.error("Unable to parse string date {} to a DateTime object", stringValue);
-        }
-    }
-
-    private void updateChannelWithVersion(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
-        String stringValue = registers.stream()
-                .map(readRegistersMap::get)
-                .map(v -> ByteBuffer.wrap(v).getShort())
-                .map(rawVal -> (rawVal >> 12) + "." +
-                        ((rawVal >> 8) & 0x0F) + "." +
-                        ((rawVal >> 4) & 0x0F) + "." +
-                        (rawVal & 0x0F))
-                .collect(Collectors.joining());
-
-        updateState(channelUID, new StringType(stringValue));
-    }
-
-    private void updateChannelWithStringValue(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
-        String stringValue = registers.stream().map(readRegistersMap::get).reduce(new StringBuilder(), (acc, val) -> {
-            short shortValue = ByteBuffer.wrap(val).order(ByteOrder.BIG_ENDIAN).getShort();
-            return acc.append((char) (shortValue >> 8)).append((char) (shortValue & 0xFF));
-        }, StringBuilder::append).toString();
-
-        updateState(channelUID, new StringType(stringValue));
-    }
-
-    private void updateChannelWithNumericValue(ParameterItem parameterItem, ChannelUID channelUID,
-                                               List<Integer> registers, Map<Integer, byte[]> readRegistersMap, ValueType valueType) {
-        BigInteger value = extractNumericValue(registers, readRegistersMap, valueType);
-        BigDecimal convertedValue = convertNumericValue(value, parameterItem.getOffset(), parameterItem.getScale());
-        if (validateNumericValue(convertedValue, parameterItem.getValidation())) {
-            State state;
-            if (parameterItem.getUom() != null) {
-                try {
-                    Unit<?> uom = SimpleUnitFormat.getInstance().parse(parameterItem.getUom());
-                    state = new QuantityType<>(convertedValue, uom);
-                } catch (MeasurementParseException e) {
-                    state = new DecimalType(convertedValue);
-                }
-
-            } else {
-                state = new DecimalType(convertedValue);
-            }
-            updateState(channelUID, state);
-        }
-    }
-
-    private void updateChannelWithRawValue(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers,
-                                           Map<Integer, byte[]> readRegistersMap) {
-        String hexString = String.format("[%s]",
-                reverse(registers).stream()
-                        .map(readRegistersMap::get)
-                        .map(val -> String.format("0x%02X", ByteBuffer.wrap(val).order(ByteOrder.BIG_ENDIAN).getShort()))
-                        .collect(Collectors.joining(",")));
-
-        updateState(channelUID, new StringType(hexString));
-    }
-
-    private boolean validateNumericValue(BigDecimal convertedValue, Validation validation) {
-        return true;
-    }
-
-    private BigDecimal convertNumericValue(BigInteger value, @Nullable BigDecimal offset, @Nullable BigDecimal scale) {
-        return new BigDecimal(value).subtract(offset != null ? offset : BigDecimal.ZERO)
-                .multiply(scale != null ? scale : BigDecimal.ONE);
-    }
-
-    private BigInteger extractNumericValue(List<Integer> registers, Map<Integer, byte[]> readRegistersMap, ValueType valueType) {
-        return reverse(registers).stream().map(readRegistersMap::get).reduce(BigInteger.ZERO,
-                (acc, val) -> acc.shiftLeft(Short.SIZE).add(BigInteger.valueOf(ByteBuffer.wrap(val).getShort() & (valueType == ValueType.UNSIGNED ? 0xFFFF : 0xFFFFFFFF))),
-                BigInteger::add);
-    }
-
     private Map<ParameterItem, ChannelUID> setupChannelsForInverterDefinition(InverterDefinition inverterDefinition) {
-        List<Channel> existingChannels = thing.getChannels();
-
         ThingBuilder thingBuilder = editThing();
 
-        Map<ParameterItem, Channel> paramItemChannelMap = inverterDefinition.getParameters().stream()
-                .flatMap(parameter -> {
-                    String groupName = escapeName(parameter.getGroup());
-                    ChannelGroupTypeUID channelGroupTypeUID = this.channelGroupTypeProvider
-                            .registerChannelGroupType(StringUtils.lowerCase(groupName));
-                    thingTypeProvider.registerChannelGroupDefinitions(List.of(new ChannelGroupDefinition(
-                            StringUtils.lowerCase(groupName), channelGroupTypeUID, groupName, groupName)));
+        List<Channel> oldDynamicChannels = thing.getChannels().stream()
+                .filter(channel -> channel.getProperties().containsKey(DYNAMIC_CHANNEL))
+                .toList();
 
-                    return parameter.getItems().stream().map(item -> {
-                        String channelId = escapeName(item.getName());
-                        String channelTypeId = escapeName(item.getName());
+        Map<ParameterItem, Channel> newDynamicItemChannelMap =
+                solarmanChannelManager.generateItemChannelMap(thing, inverterDefinition);
 
-                        final ChannelTypeUID channelTypeUID = new ChannelTypeUID(
-                                SolarmanBindingConstants.SOLARMAN_BINDING_ID, channelTypeId);
+        // Remove old dynamic channels
+        thingBuilder.withoutChannels(oldDynamicChannels);
 
-                        this.channelTypeProvider.registerChannelType(channelTypeUID, item);
-
-                        return Pair.of(item, ChannelBuilder
-                                .create(new ChannelUID(new ChannelGroupUID(thing.getUID(), channelGroupTypeUID.getId()),
-                                        channelId))
-                                .withType(channelTypeUID).withKind(ChannelKind.STATE)
-                                .withConfiguration(new Configuration()).build());
-                    });
-                })
-                .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-
-        ArrayList<Channel> dynamicChannels = new ArrayList<>(paramItemChannelMap.values());
-
-        thingBuilder.withChannels(
-                Stream.concat(existingChannels.stream(), dynamicChannels.stream())
-                        .filter(channel -> thing.getChannel(channel.getUID()) == null)
-                        .collect(Collectors.toList())
+        // Add new dynamic channels
+        newDynamicItemChannelMap.values().forEach(
+                thingBuilder::withChannel
         );
 
         updateThing(thingBuilder.build());
 
-        return paramItemChannelMap.entrySet().stream()
+        logger.debug("Updated thing with id {} and {} channels", thing.getThingTypeUID(), thing.getChannels().size());
+
+        return newDynamicItemChannelMap.entrySet().stream()
                 .map(entry -> new AbstractMap.SimpleEntry<>(entry.getKey(), entry.getValue().getUID()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    }
-
-    private static String escapeName(String name) {
-        name = name.replace("+", "plus");
-        name = name.replace("-", "minus");
-        return StringUtils.replaceChars(StringUtils.lowerCase(name), " .()/\\&", "_");
     }
 
     @Override
@@ -438,9 +263,5 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
 
         if (scheduledFuture != null)
             Objects.requireNonNull(scheduledFuture).cancel(false);
-    }
-
-    private enum ValueType {
-        UNSIGNED, SIGNED
     }
 }
