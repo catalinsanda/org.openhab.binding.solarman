@@ -16,10 +16,6 @@ import java.util.Set;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
-import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnector;
-import org.openhab.binding.solarman.internal.typeprovider.SolarmanChannelGroupTypeProvider;
-import org.openhab.binding.solarman.internal.typeprovider.SolarmanChannelTypeProvider;
-import org.openhab.binding.solarman.internal.typeprovider.SolarmanThingTypeProvider;
 import org.openhab.core.thing.Thing;
 import org.openhab.core.thing.ThingTypeUID;
 import org.openhab.core.thing.binding.BaseThingHandlerFactory;
@@ -42,17 +38,9 @@ public class SolarmanHandlerFactory extends BaseThingHandlerFactory {
     private static final Set<ThingTypeUID> SUPPORTED_THING_TYPES_UIDS = Set
             .of(SolarmanBindingConstants.THING_TYPE_SOLARMAN_LOGGER);
 
-    private final SolarmanChannelTypeProvider channelTypeProvider;
-    private final SolarmanChannelGroupTypeProvider channelGroupTypeProvider;
-    private final SolarmanThingTypeProvider thingTypeProvider;
 
     @Activate
-    public SolarmanHandlerFactory(final @Reference SolarmanChannelTypeProvider channelTypeProvider,
-            final @Reference SolarmanChannelGroupTypeProvider channelGroupTypeProvider,
-            final @Reference SolarmanThingTypeProvider thingTypeProvider) {
-        this.channelTypeProvider = channelTypeProvider;
-        this.channelGroupTypeProvider = channelGroupTypeProvider;
-        this.thingTypeProvider = thingTypeProvider;
+    public SolarmanHandlerFactory() {
     }
 
     @Override
@@ -65,8 +53,7 @@ public class SolarmanHandlerFactory extends BaseThingHandlerFactory {
         ThingTypeUID thingTypeUID = thing.getThingTypeUID();
 
         if (SolarmanBindingConstants.THING_TYPE_SOLARMAN_LOGGER.equals(thingTypeUID)) {
-            return new SolarmanLoggerHandler(thing, this.channelTypeProvider, this.channelGroupTypeProvider,
-                    this.thingTypeProvider);
+            return new SolarmanLoggerHandler(thing);
         }
 
         return null;

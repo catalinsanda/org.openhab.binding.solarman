@@ -4,7 +4,7 @@
 	xmlns:config-description="https://openhab.org/schemas/config-description/v1.0.0"
 	xsi:schemaLocation="https://openhab.org/schemas/config-description/v1.0.0 https://openhab.org/schemas/config-description-1.0.0.xsd">
 
-	<config-description uri="thing-type:solarman:number_channel">
+	<config-description uri="channel-type-config:solarman:number_channel">
 		<parameter name="uom" type="text">
 			<label>Unit of Measurement</label>
 			<description>The unit of measurement used for this channel</description>
@@ -26,6 +26,9 @@
 				<option value="4">Signed Integer</option>
 				<option value="5">Text</option>
 				<option value="6">Bytes</option>
+				<option value="7">Version</option>
+				<option value="8">Date Time</option>
+				<option value="9">Time</option>
 			</options>
 		</parameter>
 		<parameter name="offset" type="decimal">
