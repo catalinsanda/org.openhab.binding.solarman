@@ -22,8 +22,17 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class InverterDefinition {
+    private String inverterDefinitionId;
     private List<Request> requests = new ArrayList<>();
     private List<Parameter> parameters = new ArrayList<>();
+
+    public String getInverterDefinitionId() {
+        return inverterDefinitionId;
+    }
+
+    public void setInverterDefinitionId(String inverterDefinitionId) {
+        this.inverterDefinitionId = inverterDefinitionId;
+    }
 
     public List<Request> getRequests() {
         return requests;

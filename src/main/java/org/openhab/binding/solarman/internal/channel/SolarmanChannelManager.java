@@ -38,7 +38,7 @@ public class SolarmanChannelManager {
                         return Pair.of(item,
                                 ChannelBuilder
                                         .create(new ChannelUID(thing.getUID(), channelId))
-                                        .withType(ChannelUtils.channelType(item))
+                                        .withType(ChannelUtils.computeChannelTypeId(inverterDefinition.getInverterDefinitionId(), groupName, item.getName()))
                                         .withLabel(item.getName())
                                         .withKind(ChannelKind.STATE)
                                         .withAcceptedItemType(ChannelUtils.getItemType(item))

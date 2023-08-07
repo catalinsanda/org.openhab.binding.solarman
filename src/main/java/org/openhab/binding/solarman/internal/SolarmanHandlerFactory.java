@@ -34,14 +34,8 @@ import org.osgi.service.component.annotations.Reference;
 @NonNullByDefault
 @Component(configurationPid = "binding.solarman", service = ThingHandlerFactory.class)
 public class SolarmanHandlerFactory extends BaseThingHandlerFactory {
-
     private static final Set<ThingTypeUID> SUPPORTED_THING_TYPES_UIDS = Set
             .of(SolarmanBindingConstants.THING_TYPE_SOLARMAN_LOGGER);
-
-
-    @Activate
-    public SolarmanHandlerFactory() {
-    }
 
     @Override
     public boolean supportsThingType(ThingTypeUID thingTypeUID) {
