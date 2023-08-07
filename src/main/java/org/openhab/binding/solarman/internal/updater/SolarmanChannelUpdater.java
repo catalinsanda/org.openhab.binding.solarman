@@ -1,5 +1,6 @@
 package org.openhab.binding.solarman.internal.updater;
 
+import org.apache.commons.lang3.StringUtils;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.binding.solarman.internal.defmodel.ParameterItem;
 import org.openhab.binding.solarman.internal.defmodel.Request;
@@ -7,6 +8,7 @@ import org.openhab.binding.solarman.internal.defmodel.Validation;
 import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnection;
 import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnector;
 import org.openhab.binding.solarman.internal.modbus.SolarmanV5Protocol;
+import org.openhab.binding.solarman.internal.typeprovider.ChannelUtils;
 import org.openhab.binding.solarman.internal.util.StreamUtils;
 import org.openhab.core.library.types.DateTimeType;
 import org.openhab.core.library.types.DecimalType;
@@ -15,10 +17,8 @@ import org.openhab.core.library.types.StringType;
 import org.openhab.core.thing.ChannelUID;
 import org.openhab.core.thing.ThingStatus;
 import org.openhab.core.types.State;
-import org.openhab.core.types.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import tech.units.indriya.format.SimpleUnitFormat;
 
 import javax.measure.Unit;
 import javax.measure.format.MeasurementParseException;
@@ -40,7 +40,7 @@ import java.util.stream.Stream;
 import static org.openhab.binding.solarman.internal.util.StreamUtils.reverse;
 
 public class SolarmanChannelUpdater {
-    private final Logger logger = LoggerFactory.getLogger(SolarmanChannelUpdater.class);
+    private final Logger LOGGER = LoggerFactory.getLogger(SolarmanChannelUpdater.class);
     private final StatusUpdater statusUpdater;
     private final StateUpdater stateUpdater;
 
@@ -55,7 +55,7 @@ public class SolarmanChannelUpdater {
                                     Map<ParameterItem, ChannelUID> paramToChannelMapping) {
 
         try (SolarmanLoggerConnection solarmanLoggerConnection = solarmanLoggerConnector.createConnection()) {
-            logger.debug("Fetching data from logger");
+            LOGGER.debug("Fetching data from logger");
 
             Map<Integer, byte[]> readRegistersMap = requests.stream()
                     .map(request -> solarmanV5Protocol.readRegisters(solarmanLoggerConnection,
@@ -69,7 +69,7 @@ public class SolarmanChannelUpdater {
 
             statusUpdater.updateStatus(readRegistersMap.isEmpty() ? ThingStatus.OFFLINE : ThingStatus.ONLINE);
         } catch (Exception e) {
-            logger.error("Error invoking handler", e);
+            LOGGER.error("Error invoking handler", e);
         }
     }
 
@@ -90,7 +90,7 @@ public class SolarmanChannelUpdater {
                     case 9 -> updateChannelWithTime(channelUID, registers, readRegistersMap);
                 }
             } else {
-                logger.error("Unable to update channel {} because its registers were not read", channelUID.getId());
+                LOGGER.error("Unable to update channel {} because its registers were not read", channelUID.getId());
             }
         });
     }
@@ -130,7 +130,7 @@ public class SolarmanChannelUpdater {
 
             stateUpdater.updateState(channelUID, new DateTimeType(dateTime.atZone(ZoneId.systemDefault())));
         } catch (DateTimeParseException e) {
-            logger.error("Unable to parse string date {} to a DateTime object", stringValue);
+            LOGGER.error("Unable to parse string date {} to a DateTime object", stringValue);
         }
     }
 
@@ -162,10 +162,15 @@ public class SolarmanChannelUpdater {
         BigDecimal convertedValue = convertNumericValue(value, parameterItem.getOffset(), parameterItem.getScale());
         if (validateNumericValue(convertedValue, parameterItem.getValidation())) {
             State state;
-            if (parameterItem.getUom() != null) {
+            if (StringUtils.isNotEmpty(parameterItem.getUom())) {
                 try {
-                    Unit<?> uom = SimpleUnitFormat.getInstance().parse(parameterItem.getUom());
-                    state = new QuantityType<>(convertedValue, uom);
+                    Unit<?> unitFromDefinition = ChannelUtils.getUnitFromDefinition(parameterItem.getUom());
+                    if (unitFromDefinition != null)
+                        state = new QuantityType<>(convertedValue, unitFromDefinition);
+                    else {
+                        LOGGER.debug("Unable to parse unit: {}", parameterItem.getUom());
+                        state = new DecimalType(convertedValue);
+                    }
                 } catch (MeasurementParseException e) {
                     state = new DecimalType(convertedValue);
                 }

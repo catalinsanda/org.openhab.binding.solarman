@@ -45,7 +45,11 @@ public class DefinitionParser {
                 logger.error("Unable to read definition file {}", definitionFileName);
                 return null;
             }
-            return mapper.readValue(is, InverterDefinition.class);
+
+            InverterDefinition inverterDefinition = mapper.readValue(is, InverterDefinition.class);
+            inverterDefinition.setInverterDefinitionId(definitionId);
+
+            return inverterDefinition;
         } catch (IOException e) {
             logger.error("Error parsing definition with ID: {}", definitionId, e);
             return null;
