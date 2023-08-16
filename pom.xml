@@ -12,7 +12,6 @@
 
   <artifactId>org.openhab.binding.solarman</artifactId>
   <version>0.3.2-SNAPSHOT</version>
-  <version>0.3.1</version>
 
   <name>openHAB Add-ons :: Bundles :: Solarman Binding</name>
 
