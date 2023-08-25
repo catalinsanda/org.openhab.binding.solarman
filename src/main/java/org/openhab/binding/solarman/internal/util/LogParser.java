@@ -11,7 +11,6 @@ public class LogParser {
 
         System.out.print("Enter request frame: ");
         String requestFrameString = scanner.nextLine();
-
         System.out.print("Enter response frame: ");
         String responseFrameString = scanner.nextLine();
 
@@ -19,7 +18,10 @@ public class LogParser {
         byte[] responseFrame = convertHexToByteArray(responseFrameString);
 
         Integer[] startEnd = parseStartEnd(requestFrame);
-        System.out.printf("Request was from: 0x%04X to 0x%04X%n", startEnd[0], startEnd[1]);
+        String requestInverterId = parseInverterId(requestFrame);
+        System.out.printf("Request was from: 0x%04X to 0x%04X for logger with ID: %s%n", startEnd[0], startEnd[1], requestInverterId);
+        String responseInverterId = parseInverterId(responseFrame);
+        System.out.printf("Response was from logger with ID: %s%n", responseInverterId);
 
         byte[] responseFrameRegister = Arrays.copyOfRange(responseFrame, 25, responseFrame.length - 2);
 
@@ -30,6 +32,12 @@ public class LogParser {
             Integer value = (array[0] << 8) + array[1];
             System.err.printf("[0x%04X]: 0x%04X (%d)\n", i + startEnd[0], value, value);
         }
+    }
+
+    private static String parseInverterId(byte[] requestFrame) {
+        byte[] inverterIdBytes = Arrays.copyOfRange(requestFrame, 7, 11);
+        int inverterIdInt = ByteBuffer.wrap(inverterIdBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
+        return String.valueOf(inverterIdInt & 0x00000000ffffffffL);
     }
 
     private static Integer[] parseStartEnd(byte[] requestFrame) {
