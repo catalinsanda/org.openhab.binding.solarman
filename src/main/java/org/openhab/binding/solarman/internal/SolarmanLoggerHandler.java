@@ -12,28 +12,15 @@
  */
 package org.openhab.binding.solarman.internal;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import javax.measure.Unit;
-import javax.measure.format.MeasurementParseException;
-
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.Pair;
 import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
@@ -43,34 +30,17 @@ import org.openhab.binding.solarman.internal.defmodel.InverterDefinition;
 import org.openhab.binding.solarman.internal.defmodel.ParameterItem;
 import org.openhab.binding.solarman.internal.defmodel.Request;
 import org.openhab.binding.solarman.internal.defmodel.Validation;
-import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnection;
 import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnector;
 import org.openhab.binding.solarman.internal.modbus.SolarmanV5Protocol;
-import org.openhab.binding.solarman.internal.typeprovider.ChannelUtils;
 import org.openhab.binding.solarman.internal.updater.SolarmanChannelUpdater;
-import org.openhab.binding.solarman.internal.util.StreamUtils;
-import org.openhab.core.config.core.Configuration;
-import org.openhab.core.library.types.DateTimeType;
-import org.openhab.core.library.types.DecimalType;
-import org.openhab.core.library.types.QuantityType;
-import org.openhab.core.library.types.StringType;
 import org.openhab.core.thing.*;
 import org.openhab.core.thing.binding.BaseThingHandler;
-import org.openhab.core.thing.binding.builder.ChannelBuilder;
 import org.openhab.core.thing.binding.builder.ThingBuilder;
-import org.openhab.core.thing.type.ChannelGroupDefinition;
-import org.openhab.core.thing.type.ChannelGroupTypeUID;
-import org.openhab.core.thing.type.ChannelKind;
 import org.openhab.core.types.Command;
-import org.openhab.core.types.State;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import tech.units.indriya.format.SimpleUnitFormat;
-
 import static org.openhab.binding.solarman.internal.SolarmanBindingConstants.DYNAMIC_CHANNEL;
-import static org.openhab.binding.solarman.internal.typeprovider.ChannelUtils.escapeName;
-import static org.openhab.binding.solarman.internal.util.StreamUtils.reverse;
 
 /**
  * The {@link SolarmanLoggerHandler} is responsible for handling commands, which are
@@ -129,7 +99,7 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
             }
         }
         SolarmanLoggerConnector solarmanV5Connector = new SolarmanLoggerConnector(config);
-        SolarmanV5Protocol solarmanV5Protocol = new SolarmanV5Protocol(config, solarmanV5Connector);
+        SolarmanV5Protocol solarmanV5Protocol = new SolarmanV5Protocol(config);
 
         List<Request> mergedRequests = (StringUtils.isNotEmpty(config.getAdditionalRequests())) ?
                 mergeRequests(

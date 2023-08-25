@@ -28,7 +28,7 @@ class SolarmanV5ProtocolTest {
         SolarmanLoggerConfiguration loggerConfiguration = new SolarmanLoggerConfiguration("192.168.1.1", 8899,
                 "1234567890", "sg04lp3", 60, null);
 
-        solarmanV5Protocol = new SolarmanV5Protocol(loggerConfiguration, solarmanLoggerConnector);
+        solarmanV5Protocol = new SolarmanV5Protocol(loggerConfiguration);
     }
 
     @Test
