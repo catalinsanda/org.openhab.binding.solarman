@@ -32,6 +32,7 @@ import org.openhab.binding.solarman.internal.defmodel.Request;
 import org.openhab.binding.solarman.internal.defmodel.Validation;
 import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnector;
 import org.openhab.binding.solarman.internal.modbus.SolarmanV5Protocol;
+import org.openhab.binding.solarman.internal.state.LoggerState;
 import org.openhab.binding.solarman.internal.updater.SolarmanChannelUpdater;
 import org.openhab.core.thing.*;
 import org.openhab.core.thing.binding.BaseThingHandler;
@@ -54,6 +55,7 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
 
     private final DefinitionParser definitionParser;
     private final SolarmanChannelManager solarmanChannelManager;
+    private final LoggerState loggerState;
     @Nullable
     private volatile ScheduledFuture<?> scheduledFuture;
 
@@ -61,6 +63,7 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
         super(thing);
         this.definitionParser = new DefinitionParser();
         this.solarmanChannelManager = new SolarmanChannelManager();
+        this.loggerState = new LoggerState();
     }
 
     @Override
@@ -113,16 +116,30 @@ public class SolarmanLoggerHandler extends BaseThingHandler {
         );
 
         SolarmanChannelUpdater solarmanChannelUpdater = new SolarmanChannelUpdater(
-                this::updateStatus,
                 this::updateState
         );
 
-        scheduledFuture = scheduler.scheduleAtFixedRate(
-                () -> solarmanChannelUpdater.fetchDataFromLogger(
-                        mergedRequests,
-                        solarmanLoggerConnector,
-                        solarmanV5Protocol,
-                        paramToChannelMapping),
+        scheduledFuture = scheduler.scheduleAtFixedRate(() -> {
+                    boolean fetchSuccessful = solarmanChannelUpdater.fetchDataFromLogger(
+                            mergedRequests,
+                            solarmanLoggerConnector,
+                            solarmanV5Protocol,
+                            paramToChannelMapping,
+                            loggerState);
+
+                    if (fetchSuccessful) {
+                        updateStatus(ThingStatus.ONLINE);
+                        loggerState.setOnline();
+                    } else {
+                        updateStatus(ThingStatus.OFFLINE);
+                        loggerState.setPossiblyOffline();
+                    }
+
+                    if (loggerState.isJustBecameOffline()) {
+                        logger.info("Assuming logger is OFFLINE after {} failed requests. Disabling connection error logging until it becomes available again",
+                                LoggerState.NO_FAILED_REQUESTS);
+                    }
+                },
                 0, config.refreshInterval, TimeUnit.SECONDS
         );
     }

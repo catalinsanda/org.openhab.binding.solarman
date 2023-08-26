@@ -19,11 +19,12 @@ public class SolarmanLoggerConnection implements AutoCloseable {
         sockaddr = new InetSocketAddress(hostName, port);
     }
 
-    public byte[] sendRequest(byte[] reqFrame) {
+    public byte[] sendRequest(byte[] reqFrame, Boolean allowLogging) {
         // Will not be used by multiple threads, so not bothering making it thread safe for now
         if (socket == null) {
-            if ((socket = connectSocket()) == null) {
-                LOGGER.info("Error creating socket");
+            if ((socket = connectSocket(allowLogging)) == null) {
+                if (allowLogging)
+                    LOGGER.info("Error creating socket");
                 return new byte[0];
             }
         }
@@ -32,7 +33,8 @@ public class SolarmanLoggerConnection implements AutoCloseable {
             LOGGER.debug("Request frame: " + bytesToHex(reqFrame));
             socket.getOutputStream().write(reqFrame);
         } catch (IOException e) {
-            LOGGER.info("Unable to send frame to logger", e);
+            if (allowLogging)
+                LOGGER.info("Unable to send frame to logger", e);
             return new byte[0];
         }
 
@@ -45,7 +47,8 @@ public class SolarmanLoggerConnection implements AutoCloseable {
             try {
                 int bytesRead = socket.getInputStream().read(buffer);
                 if (bytesRead < 0) {
-                    LOGGER.info("No data received");
+                    if (allowLogging)
+                        LOGGER.info("No data received");
                 } else {
                     byte[] data = Arrays.copyOfRange(buffer, 0, bytesRead);
                     if (LOGGER.isDebugEnabled())
@@ -54,11 +57,12 @@ public class SolarmanLoggerConnection implements AutoCloseable {
                 }
             } catch (SocketTimeoutException e) {
                 LOGGER.debug("Connection timeout", e);
-                if (attempts == 0) {
+                if (attempts == 0 && allowLogging) {
                     LOGGER.info("Too many connection timeouts");
                 }
             } catch (IOException e) {
-                LOGGER.info("Connection error", e);
+                if (allowLogging)
+                    LOGGER.info("Connection error", e);
             }
         }
 
@@ -70,7 +74,7 @@ public class SolarmanLoggerConnection implements AutoCloseable {
                 .collect(Collectors.joining());
     }
 
-    private Socket connectSocket() {
+    private Socket connectSocket(Boolean allowLogging) {
         try {
             Socket clientSocket = new Socket();
 
@@ -79,7 +83,8 @@ public class SolarmanLoggerConnection implements AutoCloseable {
 
             return clientSocket;
         } catch (IOException e) {
-            LOGGER.error("Could not open socket on IP " + sockaddr.toString(), e);
+            if (allowLogging)
+                LOGGER.error("Could not open socket on IP " + sockaddr.toString(), e);
             return null;
         }
     }

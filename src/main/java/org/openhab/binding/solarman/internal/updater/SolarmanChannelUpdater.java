@@ -8,6 +8,7 @@ import org.openhab.binding.solarman.internal.defmodel.Validation;
 import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnection;
 import org.openhab.binding.solarman.internal.modbus.SolarmanLoggerConnector;
 import org.openhab.binding.solarman.internal.modbus.SolarmanV5Protocol;
+import org.openhab.binding.solarman.internal.state.LoggerState;
 import org.openhab.binding.solarman.internal.typeprovider.ChannelUtils;
 import org.openhab.binding.solarman.internal.util.StreamUtils;
 import org.openhab.core.library.types.DateTimeType;
@@ -15,7 +16,6 @@ import org.openhab.core.library.types.DecimalType;
 import org.openhab.core.library.types.QuantityType;
 import org.openhab.core.library.types.StringType;
 import org.openhab.core.thing.ChannelUID;
-import org.openhab.core.thing.ThingStatus;
 import org.openhab.core.types.State;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,18 +41,17 @@ import static org.openhab.binding.solarman.internal.util.StreamUtils.reverse;
 
 public class SolarmanChannelUpdater {
     private final Logger LOGGER = LoggerFactory.getLogger(SolarmanChannelUpdater.class);
-    private final StatusUpdater statusUpdater;
     private final StateUpdater stateUpdater;
 
-    public SolarmanChannelUpdater(StatusUpdater statusUpdater, StateUpdater stateUpdater) {
-        this.statusUpdater = statusUpdater;
+    public SolarmanChannelUpdater(StateUpdater stateUpdater) {
         this.stateUpdater = stateUpdater;
     }
 
-    public void fetchDataFromLogger(List<Request> requests,
-                                    SolarmanLoggerConnector solarmanLoggerConnector,
-                                    SolarmanV5Protocol solarmanV5Protocol,
-                                    Map<ParameterItem, ChannelUID> paramToChannelMapping) {
+    public boolean fetchDataFromLogger(List<Request> requests,
+                                       SolarmanLoggerConnector solarmanLoggerConnector,
+                                       SolarmanV5Protocol solarmanV5Protocol,
+                                       Map<ParameterItem, ChannelUID> paramToChannelMapping,
+                                       LoggerState loggerState) {
 
         try (SolarmanLoggerConnection solarmanLoggerConnection = solarmanLoggerConnector.createConnection()) {
             LOGGER.debug("Fetching data from logger");
@@ -61,15 +60,18 @@ public class SolarmanChannelUpdater {
                     .map(request -> solarmanV5Protocol.readRegisters(solarmanLoggerConnection,
                             (byte) request.getMbFunctioncode().intValue(),
                             request.getStart(),
-                            request.getEnd())
+                            request.getEnd(),
+                            !loggerState.isOffline())
                     )
                     .reduce(new HashMap<>(), this::mergeMaps);
 
-            updateChannelsForReadRegisters(paramToChannelMapping, readRegistersMap);
+            if (!readRegistersMap.isEmpty())
+                updateChannelsForReadRegisters(paramToChannelMapping, readRegistersMap);
 
-            statusUpdater.updateStatus(readRegistersMap.isEmpty() ? ThingStatus.OFFLINE : ThingStatus.ONLINE);
+            return !readRegistersMap.isEmpty();
         } catch (Exception e) {
             LOGGER.error("Error invoking handler", e);
+            return false;
         }
     }
 
@@ -217,11 +219,6 @@ public class SolarmanChannelUpdater {
 
     private enum ValueType {
         UNSIGNED, SIGNED
-    }
-
-    @FunctionalInterface
-    public interface StatusUpdater {
-        void updateStatus(ThingStatus thingStatus);
     }
 
     @FunctionalInterface
