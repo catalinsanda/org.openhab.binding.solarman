@@ -1,6 +1,7 @@
 package org.openhab.binding.solarman.internal.modbus;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.when;
 
@@ -47,11 +48,11 @@ class SolarmanV5ProtocolTest {
     @Test
     void testReadRegister0x01() {
         // given
-        when(solarmanLoggerConnection.sendRequest(any())).thenReturn(
+        when(solarmanLoggerConnection.sendRequest(any(), eq(true))).thenReturn(
                 hexStringToByteArray("a5000000000000000000000000000000000000000000000000010301000ac84300000015"));
 
         // when
-        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 1, 1);
+        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 1, 1, true);
 
         // then
         assertEquals(1, regValues.size());
@@ -62,11 +63,11 @@ class SolarmanV5ProtocolTest {
     @Test
     void testReadRegisters0x02_0x03() {
         // given
-        when(solarmanLoggerConnection.sendRequest(any())).thenReturn(
+        when(solarmanLoggerConnection.sendRequest(any(), eq(true))).thenReturn(
                 hexStringToByteArray("a5000000000000000000000000000000000000000000000000010302000a000b13f600000015"));
 
         // when
-        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 2, 3);
+        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 2, 3, true);
 
         // then
         assertEquals(2, regValues.size());
@@ -79,11 +80,11 @@ class SolarmanV5ProtocolTest {
     @Test
     void testReadRegisterSUN_10K_SG04LP3_EU_part1() {
         // given
-        when(solarmanLoggerConnection.sendRequest(any())).thenReturn(hexStringToByteArray(
+        when(solarmanLoggerConnection.sendRequest(any(), eq(true))).thenReturn(hexStringToByteArray(
                 "a53b0010150007482ee38d020121d0060091010000403e486301032800ffffff160a12162420ffffffffffffffffffffffffffffffffffff0001ffff0001ffff000003e81fa45115"));
 
         // when
-        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 0x3c, 0x4f);
+        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 0x3c, 0x4f, true);
 
         // then
         assertEquals(20, regValues.size());
@@ -96,11 +97,11 @@ class SolarmanV5ProtocolTest {
     @Test
     void testReadRegisterSUN_10K_SG04LP3_EU_part2() {
         // given
-        when(solarmanLoggerConnection.sendRequest(any())).thenReturn(hexStringToByteArray(
+        when(solarmanLoggerConnection.sendRequest(any(), eq(true))).thenReturn(hexStringToByteArray(
                 "a5330010150008482ee38d020122d0060091010000403e486301032000010000ffffffffffff0001ffffffffffffffffffff0000ffff0011ffffffff3a005715"));
 
         // when
-        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 0x50, 0x5f);
+        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 0x50, 0x5f, true);
 
         // then
         assertEquals(16, regValues.size());

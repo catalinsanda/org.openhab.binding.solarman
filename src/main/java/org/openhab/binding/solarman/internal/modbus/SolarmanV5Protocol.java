@@ -23,12 +23,12 @@ public class SolarmanV5Protocol {
         this.solarmanLoggerConfiguration = solarmanLoggerConfiguration;
     }
 
-    public Map<Integer, byte[]> readRegisters(SolarmanLoggerConnection solarmanLoggerConnection, byte mbFunctionCode, int firstReg, int lastReg) {
+    public Map<Integer, byte[]> readRegisters(SolarmanLoggerConnection solarmanLoggerConnection, byte mbFunctionCode, int firstReg, int lastReg, Boolean allowLogging) {
         byte[] solarmanV5Frame = buildSolarmanV5Frame(mbFunctionCode, firstReg, lastReg);
-        byte[] respFrame = solarmanLoggerConnection.sendRequest(solarmanV5Frame);
+        byte[] respFrame = solarmanLoggerConnection.sendRequest(solarmanV5Frame, allowLogging);
         if (respFrame.length > 0) {
-            byte[] modbusRespFrame = extractModbusResponseFrame(respFrame, solarmanV5Frame);
-            return parseModbusReadHoldingRegistersResponse(modbusRespFrame, firstReg, lastReg);
+            byte[] modbusRespFrame = extractModbusResponseFrame(respFrame, solarmanV5Frame, allowLogging);
+            return parseModbusReadHoldingRegistersResponse(modbusRespFrame, firstReg, lastReg, allowLogging);
         } else {
             return Collections.emptyMap();
         }
@@ -153,12 +153,13 @@ public class SolarmanV5Protocol {
         return ByteBuffer.allocate(req.length + crc.length).put(req).put(crc).array();
     }
 
-    protected Map<Integer, byte[]> parseModbusReadHoldingRegistersResponse(byte[] frame, int firstReg, int lastReg) {
+    protected Map<Integer, byte[]> parseModbusReadHoldingRegistersResponse(byte[] frame, int firstReg, int lastReg, Boolean allowLogging) {
         int regCount = lastReg - firstReg + 1;
         Map<Integer, byte[]> registers = new HashMap<>();
         int expectedFrameDataLen = 2 + 1 + regCount * 2;
         if (frame == null || frame.length < expectedFrameDataLen + 2) {
-            LOGGER.error("Modbus frame is too short or empty");
+            if (allowLogging)
+                LOGGER.error("Modbus frame is too short or empty");
             return registers;
         }
 
@@ -167,7 +168,8 @@ public class SolarmanV5Protocol {
         int expectedCrc = CRC16Modbus.calculate(Arrays.copyOfRange(frame, 0, expectedFrameDataLen));
 
         if (actualCrc != expectedCrc) {
-            LOGGER.error(String.format("Modbus frame crc is not valid. Expected %04x, got %04x", expectedCrc, actualCrc));
+            if (allowLogging)
+                LOGGER.error(String.format("Modbus frame crc is not valid. Expected %04x, got %04x", expectedCrc, actualCrc));
             return registers;
         }
 
@@ -181,21 +183,26 @@ public class SolarmanV5Protocol {
         return registers;
     }
 
-    protected byte[] extractModbusResponseFrame(byte[] responseFrame, byte[] requestFrame) {
-        if (responseFrame == null) {
-            LOGGER.error("No response frame");
+    protected byte[] extractModbusResponseFrame(byte[] responseFrame, byte[] requestFrame, Boolean allowLogging) {
+        if (responseFrame == null || responseFrame.length == 0) {
+            if (allowLogging)
+                LOGGER.error("No response frame");
             return null;
         } else if (responseFrame.length == 29) {
+
             parseResponseErrorCode(responseFrame, requestFrame);
             return null;
         } else if (responseFrame.length < (29 + 4)) {
-            LOGGER.error("Response frame is too short");
+            if (allowLogging)
+                LOGGER.error("Response frame is too short");
             return null;
         } else if (responseFrame[0] != (byte) 0xA5) {
-            LOGGER.error("Response frame has invalid starting byte");
+            if (allowLogging)
+                LOGGER.error("Response frame has invalid starting byte");
             return null;
         } else if (responseFrame[responseFrame.length - 1] != (byte) 0x15) {
-            LOGGER.error("Response frame has invalid ending byte");
+            if (allowLogging)
+                LOGGER.error("Response frame has invalid ending byte");
             return null;
         }
 
