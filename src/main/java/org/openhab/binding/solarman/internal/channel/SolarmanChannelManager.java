@@ -1,8 +1,25 @@
+/**
+ * Copyright (c) 2010-2024 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.binding.solarman.internal.channel;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.commons.lang3.tuple.Pair;
+import static org.openhab.binding.solarman.internal.SolarmanBindingConstants.DYNAMIC_CHANNEL;
+import static org.openhab.binding.solarman.internal.typeprovider.ChannelUtils.escapeName;
+
+import java.util.AbstractMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import org.openhab.binding.solarman.internal.defmodel.InverterDefinition;
 import org.openhab.binding.solarman.internal.defmodel.ParameterItem;
 import org.openhab.binding.solarman.internal.typeprovider.ChannelUtils;
@@ -13,13 +30,12 @@ import org.openhab.core.thing.Thing;
 import org.openhab.core.thing.binding.builder.ChannelBuilder;
 import org.openhab.core.thing.type.ChannelKind;
 
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-import static org.openhab.binding.solarman.internal.SolarmanBindingConstants.DYNAMIC_CHANNEL;
-import static org.openhab.binding.solarman.internal.typeprovider.ChannelUtils.escapeName;
-
+/**
+ * @author Catalin Sanda - Initial contribution
+ */
 public class SolarmanChannelManager {
     private final ObjectMapper objectMapper;
 
@@ -28,26 +44,22 @@ public class SolarmanChannelManager {
     }
 
     public Map<ParameterItem, Channel> generateItemChannelMap(Thing thing, InverterDefinition inverterDefinition) {
-        return inverterDefinition.getParameters().stream()
-                .flatMap(parameter -> {
-                    String groupName = escapeName(parameter.getGroup());
+        return inverterDefinition.getParameters().stream().flatMap(parameter -> {
+            String groupName = escapeName(parameter.getGroup());
 
-                    return parameter.getItems().stream().map(item -> {
-                        String channelId = groupName + "_" + escapeName(item.getName());
+            return parameter.getItems().stream().map(item -> {
+                String channelId = groupName + "_" + escapeName(item.getName());
 
-                        return Pair.of(item,
-                                ChannelBuilder
-                                        .create(new ChannelUID(thing.getUID(), channelId))
-                                        .withType(ChannelUtils.computeChannelTypeId(inverterDefinition.getInverterDefinitionId(), groupName, item.getName()))
-                                        .withLabel(item.getName())
-                                        .withKind(ChannelKind.STATE)
-                                        .withAcceptedItemType(ChannelUtils.getItemType(item))
-                                        .withProperties(Map.of(DYNAMIC_CHANNEL, Boolean.TRUE.toString()))
-                                        .withConfiguration(buildConfigurationFromItem(item)).build()
-                        );
-                    });
-                })
-                .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+                Channel channel = ChannelBuilder.create(new ChannelUID(thing.getUID(), channelId))
+                        .withType(ChannelUtils.computeChannelTypeId(inverterDefinition.getInverterDefinitionId(),
+                                groupName, item.getName()))
+                        .withLabel(item.getName()).withKind(ChannelKind.STATE)
+                        .withAcceptedItemType(ChannelUtils.getItemType(item))
+                        .withProperties(Map.of(DYNAMIC_CHANNEL, Boolean.TRUE.toString()))
+                        .withConfiguration(buildConfigurationFromItem(item)).build();
+                return new AbstractMap.SimpleEntry<>(item, channel);
+            });
+        }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private Configuration buildConfigurationFromItem(ParameterItem item) {
@@ -61,9 +73,8 @@ public class SolarmanChannelManager {
         baseChannelConfig.scale = item.getScale();
         baseChannelConfig.uom = item.getUom();
 
-        Map<String, Object> configurationMap = objectMapper
-                .convertValue(baseChannelConfig, new TypeReference<>() {
-                });
+        Map<String, Object> configurationMap = objectMapper.convertValue(baseChannelConfig, new TypeReference<>() {
+        });
 
         configurationMap.forEach(configuration::put);
 
@@ -71,10 +82,8 @@ public class SolarmanChannelManager {
     }
 
     private String convertRegisters(List<Integer> registers) {
-        return "[" +
-                registers.stream()
-                        .map(register -> String.format("0x%04X", register))
-                        .collect(Collectors.joining(",")) +
-                "]";
+        return "["
+                + registers.stream().map(register -> String.format("0x%04X", register)).collect(Collectors.joining(","))
+                + "]";
     }
 }

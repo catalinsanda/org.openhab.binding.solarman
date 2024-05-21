@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2010-2024 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.binding.solarman.internal.modbus;
 
 import java.nio.ByteBuffer;
@@ -8,7 +20,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.openhab.binding.solarman.internal.SolarmanLoggerConfiguration;
-import org.openhab.binding.solarman.internal.SolarmanLoggerHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,14 +27,15 @@ import org.slf4j.LoggerFactory;
  * @author Catalin Sanda - Initial contribution
  */
 public class SolarmanV5Protocol {
-    private final static Logger LOGGER = LoggerFactory.getLogger(SolarmanLoggerHandler.class);
+    private final static Logger LOGGER = LoggerFactory.getLogger(SolarmanV5Protocol.class);
     private final SolarmanLoggerConfiguration solarmanLoggerConfiguration;
 
     public SolarmanV5Protocol(SolarmanLoggerConfiguration solarmanLoggerConfiguration) {
         this.solarmanLoggerConfiguration = solarmanLoggerConfiguration;
     }
 
-    public Map<Integer, byte[]> readRegisters(SolarmanLoggerConnection solarmanLoggerConnection, byte mbFunctionCode, int firstReg, int lastReg, Boolean allowLogging) {
+    public Map<Integer, byte[]> readRegisters(SolarmanLoggerConnection solarmanLoggerConnection, byte mbFunctionCode,
+            int firstReg, int lastReg, Boolean allowLogging) {
         byte[] solarmanV5Frame = buildSolarmanV5Frame(mbFunctionCode, firstReg, lastReg);
         byte[] respFrame = solarmanLoggerConnection.sendRequest(solarmanV5Frame, allowLogging);
         if (respFrame.length > 0) {
@@ -40,8 +52,8 @@ public class SolarmanV5Protocol {
      * <a href="https://pysolarmanv5.readthedocs.io/en/latest/solarmanv5_protocol.html">Solarman V5 Protocol</a>
      *
      * @param mbFunctionCode
-     * @param firstReg       - the start register
-     * @param lastReg        - the end register
+     * @param firstReg - the start register
+     * @param lastReg - the end register
      * @return byte array containing the Solarman V5 frame
      */
     protected byte[] buildSolarmanV5Frame(byte mbFunctionCode, int firstReg, int lastReg) {
@@ -60,11 +72,11 @@ public class SolarmanV5Protocol {
         // Checksum (obviously!) and End.
         // Note, that this field is completely separate to the Modbus RTU checksum, which coincidentally, is the two
         // bytes immediately preceding this field.
-        byte[] checksum = new byte[]{
-                computeChecksum(Arrays.copyOfRange(headerAndPayload, 1, headerAndPayload.length))};
+        byte[] checksum = new byte[] {
+                computeChecksum(Arrays.copyOfRange(headerAndPayload, 1, headerAndPayload.length)) };
 
         // (one byte) – Denotes the end of the V5 frame. Always 0x15.
-        byte[] end = new byte[]{(byte) 0x15};
+        byte[] end = new byte[] { (byte) 0x15 };
 
         return ByteBuffer.allocate(checksum.length + end.length).put(checksum).put(end).array();
     }
@@ -81,7 +93,7 @@ public class SolarmanV5Protocol {
 
     private byte[] buildSolarmanV5FrameHeader(int payloadSize) {
         // (one byte) Denotes the start of the V5 frame. Always 0xA5.
-        byte[] start = new byte[]{(byte) 0xA5};
+        byte[] start = new byte[] { (byte) 0xA5 };
 
         // (two bytes) Payload length
         byte[] length = ByteBuffer.allocate(Short.BYTES).order(ByteOrder.LITTLE_ENDIAN).putShort((short) payloadSize)
@@ -89,7 +101,7 @@ public class SolarmanV5Protocol {
 
         // (two bytes) – Describes the type of V5 frame. For Modbus RTU requests, the control code is 0x4510. For Modbus
         // RTU responses, the control code is 0x1510.
-        byte[] controlCode = new byte[]{(byte) 0x10, (byte) 0x45};
+        byte[] controlCode = new byte[] { (byte) 0x10, (byte) 0x45 };
 
         // (two bytes) – This field acts as a two-way sequence number. On outgoing requests, the first byte of this
         // field is echoed back in the same position on incoming responses.
@@ -97,7 +109,7 @@ public class SolarmanV5Protocol {
         // The second byte is incremented by the data logging stick for every response sent (either to Solarman Cloud or
         // local requests).
         // @TODO the increment part
-        byte[] serial = new byte[]{(byte) 0x00, (byte) 0x00};
+        byte[] serial = new byte[] { (byte) 0x00, (byte) 0x00 };
 
         // (four bytes) – Serial number of Solarman data logging stick
         byte[] loggerSerial = ByteBuffer.allocate(Integer.BYTES).order(ByteOrder.LITTLE_ENDIAN)
@@ -111,16 +123,16 @@ public class SolarmanV5Protocol {
 
     protected byte[] buildSolarmanV5FrameRequestPayload(byte mbFunctionCode, int firstReg, int lastReg) {
         // (one byte) – Denotes the frame type.
-        byte[] frameType = new byte[]{0x02};
+        byte[] frameType = new byte[] { 0x02 };
         // (two bytes) – Denotes the sensor type.
-        byte[] sensorType = new byte[]{0x00, 0x00};
+        byte[] sensorType = new byte[] { 0x00, 0x00 };
         // (four bytes) – Denotes the frame total working time. See corresponding response field of same name for
         // further details.
-        byte[] totalWorkingTime = new byte[]{0x00, 0x00, 0x00, 0x00};
+        byte[] totalWorkingTime = new byte[] { 0x00, 0x00, 0x00, 0x00 };
         // (four bytes) – Denotes the frame power on time.
-        byte[] powerOnTime = new byte[]{0x00, 0x00, 0x00, 0x00};
+        byte[] powerOnTime = new byte[] { 0x00, 0x00, 0x00, 0x00 };
         // Denotes the frame offset time.
-        byte[] offsetTime = new byte[]{0x00, 0x00, 0x00, 0x00};
+        byte[] offsetTime = new byte[] { 0x00, 0x00, 0x00, 0x00 };
         // (variable length) – Modbus RTU request frame.
         byte[] requestFrame = buildModbusReadHoldingRegistersRequestFrame((byte) 0x01, mbFunctionCode, firstReg,
                 lastReg);
@@ -136,14 +148,14 @@ public class SolarmanV5Protocol {
      * Based on <a href="https://www.modbustools.com/modbus.html#function03">Function 03 (03hex) Read Holding
      * Registers</a>
      *
-     * @param slaveId        - Slave Address
+     * @param slaveId - Slave Address
      * @param mbFunctionCode -
-     * @param firstReg       - Starting Address
-     * @param lastReg        - Ending Address
+     * @param firstReg - Starting Address
+     * @param lastReg - Ending Address
      * @return byte array containing the Modbus request frame
      */
     protected byte[] buildModbusReadHoldingRegistersRequestFrame(byte slaveId, byte mbFunctionCode, int firstReg,
-                                                                 int lastReg) {
+            int lastReg) {
         int regCount = lastReg - firstReg + 1;
         byte[] req = ByteBuffer.allocate(6).put(slaveId).put(mbFunctionCode).putShort((short) firstReg)
                 .putShort((short) regCount).array();
@@ -153,7 +165,8 @@ public class SolarmanV5Protocol {
         return ByteBuffer.allocate(req.length + crc.length).put(req).put(crc).array();
     }
 
-    protected Map<Integer, byte[]> parseModbusReadHoldingRegistersResponse(byte[] frame, int firstReg, int lastReg, Boolean allowLogging) {
+    protected Map<Integer, byte[]> parseModbusReadHoldingRegistersResponse(byte[] frame, int firstReg, int lastReg,
+            Boolean allowLogging) {
         int regCount = lastReg - firstReg + 1;
         Map<Integer, byte[]> registers = new HashMap<>();
         int expectedFrameDataLen = 2 + 1 + regCount * 2;
@@ -169,14 +182,15 @@ public class SolarmanV5Protocol {
 
         if (actualCrc != expectedCrc) {
             if (allowLogging)
-                LOGGER.error(String.format("Modbus frame crc is not valid. Expected %04x, got %04x", expectedCrc, actualCrc));
+                LOGGER.error("Modbus frame crc is not valid. Expected {}, got {}", String.format("%04x", expectedCrc),
+                        String.format("%04x", actualCrc));
             return registers;
         }
 
         for (int i = 0; i < regCount; i++) {
             int p1 = 3 + (i * 2);
             ByteBuffer order = ByteBuffer.wrap(frame, p1, 2).order(ByteOrder.BIG_ENDIAN);
-            byte[] array = new byte[]{order.get(), order.get()};
+            byte[] array = new byte[] { order.get(), order.get() };
             registers.put(i + firstReg, array);
         }
 
@@ -210,17 +224,15 @@ public class SolarmanV5Protocol {
     }
 
     protected void parseResponseErrorCode(byte[] responseFrame, byte[] requestFrame) {
-        if (responseFrame[0] == (byte) 0xA5 && responseFrame[1] == (byte) 0x10 &&
-                !Arrays.equals(Arrays.copyOfRange(responseFrame, 7, 11),
-                        Arrays.copyOfRange(requestFrame, 7, 11))) {
+        if (responseFrame[0] == (byte) 0xA5 && responseFrame[1] == (byte) 0x10
+                && !Arrays.equals(Arrays.copyOfRange(responseFrame, 7, 11), Arrays.copyOfRange(requestFrame, 7, 11))) {
 
             String requestInverterId = parseInverterId(requestFrame);
             String responseInverterId = parseInverterId(responseFrame);
 
-            LOGGER.error(String.format("There was a missmatch between the request logger ID: %s and the response logger ID: %s . " +
-                            "Make sure you are using the logger ID and not the inverter ID. If in doubt, try the one in the response",
-                    requestInverterId,
-                    responseInverterId));
+            LOGGER.error("There was a mismatch between the request logger ID: {} and the response logger ID: {}. "
+                    + "Make sure you are using the logger ID and not the inverter ID. "
+                    + "If in doubt, try the one in the response", requestInverterId, responseInverterId);
             return;
         }
 
@@ -235,7 +247,7 @@ public class SolarmanV5Protocol {
             case 0x02 -> LOGGER.error("Error response frame: Illegal Data Address");
             case 0x03 -> LOGGER.error("Error response frame: Illegal Data Value");
             case 0x04 -> LOGGER.error("Error response frame: Slave Device Failure");
-            default -> LOGGER.error(String.format("Error response frame: Unknown error code %02x", errorCode));
+            default -> LOGGER.error("Error response frame: Unknown error code {}", String.format("%02x", errorCode));
         }
     }
 

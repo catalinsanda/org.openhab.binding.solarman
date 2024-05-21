@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
     <groupId>org.openhab.addons.bundles</groupId>
     <artifactId>org.openhab.addons.reactor.bundles</artifactId>
-    <version>4.0.1</version>
-    <relativePath />
+    <version>4.1.2</version>
+    <relativePath/>
   </parent>
 
   <artifactId>org.openhab.binding.solarman</artifactId>
@@ -67,6 +68,57 @@
   </distributionManagement>
 
   <build>
+    <pluginManagement>
+      <plugins>
+        <!-- License Maven Plugin -->
+        <plugin>
+          <groupId>com.mycila</groupId>
+          <artifactId>license-maven-plugin</artifactId>
+          <version>4.3</version>
+          <configuration>
+            <basedir>${basedir}</basedir>
+            <quiet>false</quiet>
+            <failIfMissing>true</failIfMissing>
+            <strictCheck>true</strictCheck>
+            <aggregate>true</aggregate>
+            <mapping>
+              <java>JAVADOC_STYLE</java>
+              <xml>xml-header-style</xml>
+            </mapping>
+            <useDefaultExcludes>true</useDefaultExcludes>
+            <properties>
+              <year>2024</year>
+            </properties>
+            <encoding>UTF-8</encoding>
+            <licenseSets>
+              <licenseSet>
+                <header>licenses/epl-2.0/header.txt</header>
+                <headerDefinitions>
+                  <headerDefinition>licenses/epl-2.0/xml-header-style.xml</headerDefinition>
+                </headerDefinitions>
+                <includes>
+                  <include>**/org/openhab/**/*.java</include>
+                  <include>**/features/**/header.xml</include>
+                </includes>
+                <excludes>
+                  <exclude>**/3rdparty/**</exclude>
+                  <exclude>target/**</exclude>
+                  <exclude>**/pom.xml</exclude>
+                  <exclude>_*.java</exclude>
+                </excludes>
+              </licenseSet>
+            </licenseSets>
+          </configuration>
+          <executions>
+            <execution>
+              <goals>
+                <goal>check</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+      </plugins>
+    </pluginManagement>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugin</groupId>
@@ -90,6 +142,16 @@
                 <groupId>org.openhab.addons</groupId>
                 <artifactId>org.openhab.addons.reactor</artifactId>
               </project>
+            </configuration>
+          </execution>
+          <execution>
+            <id>highest-basedir</id>
+            <goals>
+              <goal>highest-basedir</goal>
+            </goals>
+            <phase>initialize</phase>
+            <configuration>
+              <property>basedirRoot</property>
             </configuration>
           </execution>
         </executions>

@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2010-2024 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.binding.solarman.internal.modbus;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -14,6 +26,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.openhab.binding.solarman.internal.SolarmanLoggerConfiguration;
 
+/**
+ * @author Catalin Sanda - Initial contribution
+ */
 @ExtendWith(MockitoExtension.class)
 class SolarmanV5ProtocolTest {
     @Mock
@@ -36,11 +51,11 @@ class SolarmanV5ProtocolTest {
     void testbuildSolarmanV5Frame() {
         byte[] requestFrame = solarmanV5Protocol.buildSolarmanV5Frame((byte) 0x03, 0x0000, 0x0020);
 
-        byte[] expectedFrame = {(byte) 0xA5, (byte) 0x17, (byte) 0x00, (byte) 0x10, (byte) 0x45, (byte) 0x00,
+        byte[] expectedFrame = { (byte) 0xA5, (byte) 0x17, (byte) 0x00, (byte) 0x10, (byte) 0x45, (byte) 0x00,
                 (byte) 0x00, (byte) 0xD2, (byte) 0x02, (byte) 0x96, (byte) 0x49, (byte) 0x02, (byte) 0x00, (byte) 0x00,
                 (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
                 (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x01, (byte) 0x03, (byte) 0x00, (byte) 0x00,
-                (byte) 0x00, (byte) 0x21, (byte) 0x85, (byte) 0xD2, (byte) 0x9D, (byte) 0x15};
+                (byte) 0x00, (byte) 0x21, (byte) 0x85, (byte) 0xD2, (byte) 0x9D, (byte) 0x15 };
 
         assertArrayEquals(requestFrame, expectedFrame);
     }
@@ -52,7 +67,8 @@ class SolarmanV5ProtocolTest {
                 hexStringToByteArray("a5000000000000000000000000000000000000000000000000010301000ac84300000015"));
 
         // when
-        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 1, 1, true);
+        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 1, 1,
+                true);
 
         // then
         assertEquals(1, regValues.size());
@@ -67,7 +83,8 @@ class SolarmanV5ProtocolTest {
                 hexStringToByteArray("a5000000000000000000000000000000000000000000000000010302000a000b13f600000015"));
 
         // when
-        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 2, 3, true);
+        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 2, 3,
+                true);
 
         // then
         assertEquals(2, regValues.size());
@@ -84,7 +101,8 @@ class SolarmanV5ProtocolTest {
                 "a53b0010150007482ee38d020121d0060091010000403e486301032800ffffff160a12162420ffffffffffffffffffffffffffffffffffff0001ffff0001ffff000003e81fa45115"));
 
         // when
-        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 0x3c, 0x4f, true);
+        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 0x3c,
+                0x4f, true);
 
         // then
         assertEquals(20, regValues.size());
@@ -101,7 +119,8 @@ class SolarmanV5ProtocolTest {
                 "a5330010150008482ee38d020122d0060091010000403e486301032000010000ffffffffffff0001ffffffffffffffffffff0000ffff0011ffffffff3a005715"));
 
         // when
-        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 0x50, 0x5f, true);
+        Map<Integer, byte[]> regValues = solarmanV5Protocol.readRegisters(solarmanLoggerConnection, (byte) 0x03, 0x50,
+                0x5f, true);
 
         // then
         assertEquals(16, regValues.size());

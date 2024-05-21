@@ -1,3 +1,15 @@
+/**
+ * Copyright (c) 2010-2024 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.binding.solarman.internal.util;
 
 import java.util.*;
@@ -5,17 +17,19 @@ import java.util.function.BiFunction;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+/**
+ * @author Catalin Sanda - Initial contribution
+ */
 public class StreamUtils {
-    public static <A, B, C> Stream<C> zip(Stream<? extends A> a,
-                                          Stream<? extends B> b,
-                                          BiFunction<? super A, ? super B, ? extends C> zipper) {
+    public static <A, B, C> Stream<C> zip(Stream<? extends A> a, Stream<? extends B> b,
+            BiFunction<? super A, ? super B, ? extends C> zipper) {
         Objects.requireNonNull(zipper);
         Spliterator<? extends A> aSpliterator = Objects.requireNonNull(a).spliterator();
         Spliterator<? extends B> bSpliterator = Objects.requireNonNull(b).spliterator();
 
         // Zipping looses DISTINCT and SORTED characteristics
-        int characteristics = aSpliterator.characteristics() & bSpliterator.characteristics() &
-                ~(Spliterator.DISTINCT | Spliterator.SORTED);
+        int characteristics = aSpliterator.characteristics() & bSpliterator.characteristics()
+                & ~(Spliterator.DISTINCT | Spliterator.SORTED);
 
         long zipSize = ((characteristics & Spliterator.SIZED) != 0)
                 ? Math.min(aSpliterator.getExactSizeIfKnown(), bSpliterator.getExactSizeIfKnown())
@@ -36,8 +50,7 @@ public class StreamUtils {
         };
 
         Spliterator<C> split = Spliterators.spliterator(cIterator, zipSize, characteristics);
-        return (a.isParallel() || b.isParallel())
-                ? StreamSupport.stream(split, true)
+        return (a.isParallel() || b.isParallel()) ? StreamSupport.stream(split, true)
                 : StreamSupport.stream(split, false);
     }
 
@@ -51,7 +64,6 @@ public class StreamUtils {
         });
     }
 
-
-    public record Tuple<A, B>(A a, B b) {
+    public record Tuple<A, B> (A a, B b) {
     }
 }

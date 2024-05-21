@@ -1,4 +1,36 @@
+/**
+ * Copyright (c) 2010-2024 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.binding.solarman.internal.updater;
+
+import static org.openhab.binding.solarman.internal.util.StreamUtils.reverse;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
+import javax.measure.Unit;
+import javax.measure.format.MeasurementParseException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.jdt.annotation.Nullable;
@@ -20,25 +52,9 @@ import org.openhab.core.types.State;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.measure.Unit;
-import javax.measure.format.MeasurementParseException;
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
-
-import static org.openhab.binding.solarman.internal.util.StreamUtils.reverse;
-
+/**
+ * @author Catalin Sanda - Initial contribution
+ */
 public class SolarmanChannelUpdater {
     private final Logger LOGGER = LoggerFactory.getLogger(SolarmanChannelUpdater.class);
     private final StateUpdater stateUpdater;
@@ -47,22 +63,17 @@ public class SolarmanChannelUpdater {
         this.stateUpdater = stateUpdater;
     }
 
-    public boolean fetchDataFromLogger(List<Request> requests,
-                                       SolarmanLoggerConnector solarmanLoggerConnector,
-                                       SolarmanV5Protocol solarmanV5Protocol,
-                                       Map<ParameterItem, ChannelUID> paramToChannelMapping,
-                                       LoggerState loggerState) {
+    public boolean fetchDataFromLogger(List<Request> requests, SolarmanLoggerConnector solarmanLoggerConnector,
+            SolarmanV5Protocol solarmanV5Protocol, Map<ParameterItem, ChannelUID> paramToChannelMapping,
+            LoggerState loggerState) {
 
         try (SolarmanLoggerConnection solarmanLoggerConnection = solarmanLoggerConnector.createConnection()) {
             LOGGER.debug("Fetching data from logger");
 
             Map<Integer, byte[]> readRegistersMap = requests.stream()
                     .map(request -> solarmanV5Protocol.readRegisters(solarmanLoggerConnection,
-                            (byte) request.getMbFunctioncode().intValue(),
-                            request.getStart(),
-                            request.getEnd(),
-                            !loggerState.isOffline())
-                    )
+                            (byte) request.getMbFunctioncode().intValue(), request.getStart(), request.getEnd(),
+                            !loggerState.isOffline()))
                     .reduce(new HashMap<>(), this::mergeMaps);
 
             if (!readRegistersMap.isEmpty())
@@ -76,15 +87,15 @@ public class SolarmanChannelUpdater {
     }
 
     private void updateChannelsForReadRegisters(Map<ParameterItem, ChannelUID> paramToChannelMapping,
-                                                Map<Integer, byte[]> readRegistersMap) {
+            Map<Integer, byte[]> readRegistersMap) {
         paramToChannelMapping.forEach((parameterItem, channelUID) -> {
             List<Integer> registers = parameterItem.getRegisters();
             if (readRegistersMap.keySet().containsAll(registers)) {
                 switch (parameterItem.getRule()) {
-                    case 1, 3 -> updateChannelWithNumericValue(parameterItem, channelUID, registers,
-                            readRegistersMap, ValueType.UNSIGNED);
-                    case 2, 4 -> updateChannelWithNumericValue(parameterItem, channelUID, registers,
-                            readRegistersMap, ValueType.SIGNED);
+                    case 1, 3 -> updateChannelWithNumericValue(parameterItem, channelUID, registers, readRegistersMap,
+                            ValueType.UNSIGNED);
+                    case 2, 4 -> updateChannelWithNumericValue(parameterItem, channelUID, registers, readRegistersMap,
+                            ValueType.SIGNED);
                     case 5 -> updateChannelWithStringValue(channelUID, registers, readRegistersMap);
                     case 6 -> updateChannelWithRawValue(parameterItem, channelUID, registers, readRegistersMap);
                     case 7 -> updateChannelWithVersion(channelUID, registers, readRegistersMap);
@@ -97,23 +108,20 @@ public class SolarmanChannelUpdater {
         });
     }
 
-    private void updateChannelWithTime(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
-        String stringValue = registers.stream()
-                .map(readRegistersMap::get)
-                .map(v -> ByteBuffer.wrap(v).getShort())
-                .map(rawVal -> String.format("%02d", rawVal / 100) + ":" +
-                        String.format("%02d", rawVal % 100))
+    private void updateChannelWithTime(ChannelUID channelUID, List<Integer> registers,
+            Map<Integer, byte[]> readRegistersMap) {
+        String stringValue = registers.stream().map(readRegistersMap::get).map(v -> ByteBuffer.wrap(v).getShort())
+                .map(rawVal -> String.format("%02d", rawVal / 100) + ":" + String.format("%02d", rawVal % 100))
                 .collect(Collectors.joining());
 
         stateUpdater.updateState(channelUID, new StringType(stringValue));
     }
 
-    private void updateChannelWithDateTime(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
-        String stringValue = StreamUtils.zip(
-                        IntStream.range(0, registers.size()).boxed(),
-                        registers.stream().map(readRegistersMap::get).map(v -> ByteBuffer.wrap(v).getShort()),
-                        StreamUtils.Tuple::new)
-                .map(t -> {
+    private void updateChannelWithDateTime(ChannelUID channelUID, List<Integer> registers,
+            Map<Integer, byte[]> readRegistersMap) {
+        String stringValue = StreamUtils.zip(IntStream.range(0, registers.size()).boxed(),
+                registers.stream().map(readRegistersMap::get).map(v -> ByteBuffer.wrap(v).getShort()),
+                StreamUtils.Tuple::new).map(t -> {
                     int index = t.a();
                     short rawVal = t.b();
 
@@ -123,8 +131,7 @@ public class SolarmanChannelUpdater {
                         case 2 -> (rawVal >> 8) + ":" + (rawVal & 0xFF);
                         default -> (rawVal >> 8) + "" + (rawVal & 0xFF);
                     };
-                })
-                .collect(Collectors.joining());
+                }).collect(Collectors.joining());
 
         try {
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yy/M/d H:m:s");
@@ -136,20 +143,18 @@ public class SolarmanChannelUpdater {
         }
     }
 
-    private void updateChannelWithVersion(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
-        String stringValue = registers.stream()
-                .map(readRegistersMap::get)
-                .map(v -> ByteBuffer.wrap(v).getShort())
-                .map(rawVal -> (rawVal >> 12) + "." +
-                        ((rawVal >> 8) & 0x0F) + "." +
-                        ((rawVal >> 4) & 0x0F) + "." +
-                        (rawVal & 0x0F))
+    private void updateChannelWithVersion(ChannelUID channelUID, List<Integer> registers,
+            Map<Integer, byte[]> readRegistersMap) {
+        String stringValue = registers.stream().map(readRegistersMap::get).map(v -> ByteBuffer.wrap(v).getShort())
+                .map(rawVal -> (rawVal >> 12) + "." + ((rawVal >> 8) & 0x0F) + "." + ((rawVal >> 4) & 0x0F) + "."
+                        + (rawVal & 0x0F))
                 .collect(Collectors.joining());
 
         stateUpdater.updateState(channelUID, new StringType(stringValue));
     }
 
-    private void updateChannelWithStringValue(ChannelUID channelUID, List<Integer> registers, Map<Integer, byte[]> readRegistersMap) {
+    private void updateChannelWithStringValue(ChannelUID channelUID, List<Integer> registers,
+            Map<Integer, byte[]> readRegistersMap) {
         String stringValue = registers.stream().map(readRegistersMap::get).reduce(new StringBuilder(), (acc, val) -> {
             short shortValue = ByteBuffer.wrap(val).order(ByteOrder.BIG_ENDIAN).getShort();
             return acc.append((char) (shortValue >> 8)).append((char) (shortValue & 0xFF));
@@ -159,7 +164,7 @@ public class SolarmanChannelUpdater {
     }
 
     private void updateChannelWithNumericValue(ParameterItem parameterItem, ChannelUID channelUID,
-                                               List<Integer> registers, Map<Integer, byte[]> readRegistersMap, ValueType valueType) {
+            List<Integer> registers, Map<Integer, byte[]> readRegistersMap, ValueType valueType) {
         BigInteger value = extractNumericValue(registers, readRegistersMap, valueType);
         BigDecimal convertedValue = convertNumericValue(value, parameterItem.getOffset(), parameterItem.getScale());
         if (validateNumericValue(convertedValue, parameterItem.getValidation())) {
@@ -185,16 +190,14 @@ public class SolarmanChannelUpdater {
     }
 
     private void updateChannelWithRawValue(ParameterItem parameterItem, ChannelUID channelUID, List<Integer> registers,
-                                           Map<Integer, byte[]> readRegistersMap) {
+            Map<Integer, byte[]> readRegistersMap) {
         String hexString = String.format("[%s]",
-                reverse(registers).stream()
-                        .map(readRegistersMap::get)
-                        .map(val -> String.format("0x%02X", ByteBuffer.wrap(val).order(ByteOrder.BIG_ENDIAN).getShort()))
+                reverse(registers).stream().map(readRegistersMap::get).map(
+                        val -> String.format("0x%02X", ByteBuffer.wrap(val).order(ByteOrder.BIG_ENDIAN).getShort()))
                         .collect(Collectors.joining(",")));
 
         stateUpdater.updateState(channelUID, new StringType(hexString));
     }
-
 
     private boolean validateNumericValue(BigDecimal convertedValue, Validation validation) {
         return true;
@@ -205,20 +208,25 @@ public class SolarmanChannelUpdater {
                 .multiply(scale != null ? scale : BigDecimal.ONE);
     }
 
-    private BigInteger extractNumericValue(List<Integer> registers, Map<Integer, byte[]> readRegistersMap, ValueType valueType) {
-        return reverse(registers).stream().map(readRegistersMap::get).reduce(BigInteger.ZERO,
-                (acc, val) -> acc.shiftLeft(Short.SIZE).add(BigInteger.valueOf(ByteBuffer.wrap(val).getShort() & (valueType == ValueType.UNSIGNED ? 0xFFFF : 0xFFFFFFFF))),
-                BigInteger::add);
+    private BigInteger extractNumericValue(List<Integer> registers, Map<Integer, byte[]> readRegistersMap,
+            ValueType valueType) {
+        return reverse(registers)
+                .stream().map(readRegistersMap::get).reduce(
+                        BigInteger.ZERO, (acc,
+                                val) -> acc.shiftLeft(Short.SIZE)
+                                        .add(BigInteger.valueOf(ByteBuffer.wrap(val).getShort()
+                                                & (valueType == ValueType.UNSIGNED ? 0xFFFF : 0xFFFFFFFF))),
+                        BigInteger::add);
     }
 
-    private <K, V> Map<K, V> mergeMaps(Map<K, V> map1,
-                                       Map<K, V> map2) {
+    private <K, V> Map<K, V> mergeMaps(Map<K, V> map1, Map<K, V> map2) {
         return Stream.concat(map1.entrySet().stream(), map2.entrySet().stream())
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (v1, v2) -> v1));
     }
 
     private enum ValueType {
-        UNSIGNED, SIGNED
+        UNSIGNED,
+        SIGNED
     }
 
     @FunctionalInterface

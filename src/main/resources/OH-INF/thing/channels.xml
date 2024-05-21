@@ -17,7 +17,7 @@
 	</channel-type>
 
 	<channel-type id="datetime">
-		<item-type>Datetime</item-type>
+		<item-type>DateTime</item-type>
 		<label>Datetime Value</label>
 		<config-description-ref uri="channel-type-config:solarman:datetime_channel"/>
 	</channel-type>

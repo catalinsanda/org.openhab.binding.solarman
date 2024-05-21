@@ -1,7 +1,16 @@
+/**
+ * Copyright (c) 2010-2024 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.binding.solarman.internal.modbus;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.*;
@@ -9,6 +18,12 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/**
+ * @author Catalin Sanda - Initial contribution
+ */
 public class SolarmanLoggerConnection implements AutoCloseable {
     private final static Logger LOGGER = LoggerFactory.getLogger(SolarmanLoggerConnection.class);
 
@@ -30,14 +45,13 @@ public class SolarmanLoggerConnection implements AutoCloseable {
         }
 
         try {
-            LOGGER.debug("Request frame: " + bytesToHex(reqFrame));
+            LOGGER.debug("Request frame: {}", bytesToHex(reqFrame));
             socket.getOutputStream().write(reqFrame);
         } catch (IOException e) {
             if (allowLogging)
                 LOGGER.info("Unable to send frame to logger", e);
             return new byte[0];
         }
-
 
         byte[] buffer = new byte[1024];
         int attempts = 5;
@@ -52,7 +66,7 @@ public class SolarmanLoggerConnection implements AutoCloseable {
                 } else {
                     byte[] data = Arrays.copyOfRange(buffer, 0, bytesRead);
                     if (LOGGER.isDebugEnabled())
-                        LOGGER.debug("Response frame: " + bytesToHex(data));
+                        LOGGER.debug("Response frame: {}", bytesToHex(data));
                     return data;
                 }
             } catch (SocketTimeoutException e) {
@@ -84,7 +98,7 @@ public class SolarmanLoggerConnection implements AutoCloseable {
             return clientSocket;
         } catch (IOException e) {
             if (allowLogging)
-                LOGGER.error("Could not open socket on IP " + sockaddr.toString(), e);
+                LOGGER.error("Could not open socket on IP {}", sockaddr.toString(), e);
             return null;
         }
     }
