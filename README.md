@@ -1,3 +1,6 @@
+# Update
+This binding has been merged into the [openhab-addons](https://github.com/openhab/openhab-addons) repository and is available since OpenHAB 4.3. Please use that repository for bugs/PRs/feature requests.
+
 # Solarman Logger Binding
 
 [![Build Status](https://app.travis-ci.com/catalinsanda/org.openhab.binding.solarman.svg?branch=main)](https://app.travis-ci.com/catalinsanda/org.openhab.binding.solarman)
